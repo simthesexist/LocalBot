@@ -75,6 +75,7 @@ None.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260917-vlw | spawn.ts daemon-path ENOENT fix: extract resolveDaemonEntry + cpSync daemon/ into dist/main/daemon/ after tsc | 2026-09-17 | b67825c | [260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai](./quick/260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai/) |
+| 260917-vvk | window.ts dev-mode renderer URL fix: branch on built-index existence, not `!app.isPackaged` (unpackaged `npm start` was hitting localhost:5173) | 2026-09-17 | d6ad10e | [260917-vvk-fix-src-main-window-ts-10-uses-isdev-app](./quick/260917-vvk-fix-src-main-window-ts-10-uses-isdev-app/) |
 
 ### Todos
 
@@ -86,13 +87,13 @@ None.
 
 ## Session Continuity
 
-**Stopped at:** Quick task 260917-vlw landed on master — daemon spawn path fix ready to verify
-**Resume file:** .planning/quick/260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai/260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai-SUMMARY.md
+**Stopped at:** Quick task 260917-vvk landed on master — renderer URL fix unblocks `npm start`
+**Resume file:** .planning/quick/260917-vvk-fix-src-main-window-ts-10-uses-isdev-app/260917-vvk-fix-src-main-window-ts-10-uses-isdev-app-SUMMARY.md
 
-Last session: 2026-09-17T22:52:51.000Z
-Last activity: 2026-09-17 - Completed quick task 260917-vlw: spawn.ts daemon-path ENOENT fix
+Last session: 2026-09-17T23:01:50.000Z
+Last activity: 2026-09-17 - Completed quick task 260917-vvk: window.ts dev-mode renderer URL fix
 
-Next action: `npm start` (or `LOCALBOT_SMOKE_OK=1 npx playwright test tests/playwright/smoke.test.ts`) to confirm the daemon status reaches `ready` on a desktop session, then `/gsd-plan-phase 2` to begin Phase 2 (File Tools + Search + Tool System).
+Next action: `npm start` (after `npm run build`) should now load the KeyModal instead of the `localhost:5173` connection error. Confirm on a desktop session, then `/gsd-plan-phase 2` to begin Phase 2 (File Tools + Search + Tool System).
 
 ---
 
