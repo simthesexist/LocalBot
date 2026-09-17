@@ -2,6 +2,7 @@
 
 import { spawn, ChildProcess } from 'node:child_process';
 import { app, BrowserWindow } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { CHANNELS } from '../../shared/ipc-channels';
@@ -147,11 +148,22 @@ function scheduleRespawn(): void {
   }, 1000);
 }
 
+export function resolveDaemonEntry(appPath: string): string {
+  const candidates = [
+    path.join(appPath, 'daemon', 'main.cjs'),
+    path.join(appPath, '..', 'daemon', 'main.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0];
+}
+
 export async function spawnDaemon(): Promise<void> {
   intentionalStop = false;
   initialized = false;
 
-  const entry = path.join(app.getAppPath(), 'daemon', 'main.cjs');
+  const entry = resolveDaemonEntry(app.getAppPath());
   const proc = spawn(process.execPath, [entry], {
     stdio: ['pipe', 'pipe', 'inherit'],
     env: { ...process.env },
