@@ -73,7 +73,7 @@ export function useMessages(): UseMessagesApi {
         const content = prev[evt.msgId] ?? '';
         if (content.length > 0) {
           setMessages((cur) => {
-            // If message wasn't finalized yet, persist partial + stopped.
+            // If message wasn't finalized yet, persist partial + flags.
             const exists = cur.some((m) => m.msgId === evt.msgId);
             if (exists) return cur;
             return [
@@ -83,6 +83,7 @@ export function useMessages(): UseMessagesApi {
                 role: 'assistant',
                 content,
                 stopped: !evt.retryable,
+                interrupted: evt.retryable,
                 msgId: evt.msgId,
               },
             ];

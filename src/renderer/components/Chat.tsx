@@ -51,6 +51,12 @@ export function Chat({ initialMessages }: ChatProps) {
     await window.localbot.sendMessage(lastUser.content, newMsgId);
   };
 
+  const onInlineRetry = async (content: string) => {
+    clearError();
+    const newMsgId = crypto.randomUUID();
+    await window.localbot.sendMessage(content, newMsgId);
+  };
+
   const onUpdateKey = async () => {
     clearError();
     await window.localbot.key.clear();
@@ -86,7 +92,27 @@ export function Chat({ initialMessages }: ChatProps) {
 
         <div className="message-list" ref={listRef}>
           {messages.map((m) => (
-            <MessageBubble key={(m.msgId ?? `${m.ts}-${m.role}`)} message={m} />
+            <div key={(m.msgId ?? `${m.ts}-${m.role}`)}>
+              <MessageBubble message={m} />
+              {m.interrupted && m.role === 'assistant' && (
+                <div className="bubble-footer">
+                  <span>Stream interrupted — </span>
+                  <button
+                    type="button"
+                    className="inline-retry"
+                    onClick={() => {
+                      const lastUser = [...messages]
+                        .slice(0, messages.indexOf(m))
+                        .reverse()
+                        .find((x) => x.role === 'user');
+                      if (lastUser) void onInlineRetry(lastUser.content);
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
 
           {Object.entries(pendingAssistantContent).map(([msgId, content]) => (
