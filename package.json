@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first desktop AI agent app (Electron + React 19 + TypeScript)",
-  "main": "dist/main/main/index.js",
+  "main": "dist/main/index.js",
   "scripts": {
     "dev": "concurrently -k -n vite,electron -c blue,magenta \"vite\" \"npm:dev:electron\"",
     "dev:electron": "wait-on tcp:5173 && tsc -p tsconfig.main.json && electron .",
