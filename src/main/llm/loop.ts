@@ -1,8 +1,15 @@
 // Agentic loop. Streams one Anthropic turn, and if stop_reason === 'tool_use',
 // dispatches each tool call via the daemon, appends the resulting
 // tool_result block, and re-invokes the SDK. Capped at `maxTurns` (default 10)
-// per Plan 02-01 §"Pattern 2" so a runaway tool chain surfaces as a fatal
+// per Plan 02-02 §"Pattern 2" so a runaway tool chain surfaces as a fatal
 // error instead of looping forever.
+//
+// Retry layer: the underlying `messages.stream` call (inside `streamChat`)
+// already wraps a `runWithRetry` covering transient / network failures
+// (Plan 02-01 §T-P2-05). We deliberately do NOT add a second retry layer at
+// the loop level — a multi-turn sequence that fails partway through must NOT
+// silently re-run all of its `callTool` dispatches, since those have
+// side-effects on the workspace and the audit log.
 //
 // Tool errors (`denied`, `outside_workspace`, `enoent`, `not_implemented`)
 // become a `tool_result { content, isError: true }` block — they do NOT route
@@ -23,6 +30,14 @@ export interface AgenticLoopOptions {
   onToken: (delta: string) => void;
   onToolUse: (b: MessageBlock & { kind: 'tool_use' }) => void;
   onToolResult: (r: { toolUseId: string; content: string; isError: boolean }) => void;
+  /**
+   * Optional callback fired when the loop encounters an unrecoverable error
+   * (maxTurns exceeded, outer streamChat error). Errors are ALSO thrown so
+   * the caller can decide how to react. chat.ts currently relies on the
+   * throw + try/catch shape; this hook is here for future plans that want
+   * a separate channel (e.g. status-bar surfacing).
+   */
+  onError?: (e: Error) => void;
   bot?: string;          // default 'default'
   maxTurns?: number;     // default 10
 }
@@ -31,6 +46,8 @@ export interface AgenticLoopResult {
   text: string;
   toolCalls: Array<{ id: string; name: string; input: unknown; output: string; isError: boolean }>;
   blocks: MessageBlock[];
+  /** Number of `messages.stream` calls made (i.e. SDK round-trips). */
+  turns: number;
 }
 
 const DEFAULT_MAX_TURNS = 10;
@@ -68,16 +85,81 @@ function stringifyToolResult(result: unknown, isError: boolean): string {
   }
 }
 
+/**
+ * Append the assistant turn's content blocks (text + tool_use) to the
+ * messages array under the typed `anthropicBlocks` carrier. The downstream
+ * `streamChat` reads `m.anthropicBlocks` ahead of `m.content` (see client.ts
+ * `toAnthropic`), so we never need a `(m as any)` cast at the SDK boundary.
+ *
+ * Thinking / RedactedThinking blocks are skipped — the persisted thread only
+ * carries text + tool_use + tool_result shapes the renderer understands.
+ */
+function appendAssistantBlocks(
+  messages: ChatMessage[],
+  blocks: Anthropic.Messages.ContentBlock[],
+): void {
+  const content: Anthropic.Messages.ContentBlock[] = [];
+  for (const b of blocks) {
+    if (b.type === 'text') {
+      // SDK's TextBlock requires `citations: Array<TextCitation> | null` on
+      // the wire type but TextBlockParam makes it optional. Cast keeps the
+      // loop type-check clean without surfacing a `null` citations field
+      // on every persisted block. (client.ts uses the same trick.)
+      content.push({
+        type: 'text',
+        text: (b as Anthropic.Messages.TextBlock).text,
+      } as unknown as Anthropic.Messages.ContentBlock);
+    } else if (b.type === 'tool_use') {
+      const tu = b as Anthropic.Messages.ToolUseBlock;
+      content.push({ type: 'tool_use', id: tu.id, name: tu.name, input: tu.input });
+    }
+    // thinking / redacted_thinking blocks: intentionally skipped.
+  }
+  if (content.length === 0) return;
+  messages.push({
+    ts: Date.now(),
+    role: 'assistant',
+    content: '',
+    anthropicBlocks: content,
+  });
+}
+
+/**
+ * Append a synthetic user turn carrying a single `tool_result` block back to
+ * the LLM. Multiple tool_results in one turn are batched into one user
+ * message per Anthropic's API (single role, multiple content blocks).
+ */
+function appendToolResult(
+  messages: ChatMessage[],
+  results: Anthropic.Messages.ToolResultBlockParam[],
+): void {
+  if (results.length === 0) return;
+  messages.push({
+    ts: Date.now(),
+    role: 'user',
+    content: '',
+    anthropicBlocks: results as unknown as Anthropic.Messages.ContentBlock[],
+  });
+}
+
 export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticLoopResult> {
   const maxTurns = opts.maxTurns ?? DEFAULT_MAX_TURNS;
   const bot = opts.bot ?? 'default';
   const messages: ChatMessage[] = [...opts.messages];
   const blocks: MessageBlock[] = [];
   const toolCalls: AgenticLoopResult['toolCalls'] = [];
+  let turns = 0;
+
+  // Initial turn + resume turns. Each iteration:
+  //   1. streamChat → blocks + stopReason
+  //   2. If stopReason !== 'tool_use' → done.
+  //   3. Otherwise, dispatch every tool_use, build tool_result blocks,
+  //      append them to `messages`, and continue.
+  let stopReason: Anthropic.Messages.StopReason | null = null;
+  let lastBlocks: Anthropic.Messages.ContentBlock[] = [];
   let fullText = '';
 
-  for (let turn = 0; turn < maxTurns; turn++) {
-    // Reset per-turn text accumulator (the renderer owns the streaming UI).
+  while (turns < maxTurns) {
     fullText = '';
 
     const turnResult = await streamChat({
@@ -93,7 +175,7 @@ export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticL
         opts.onToolUse(b);
       },
       onDone: () => {
-        // No-op — loop waits on the awaited streamChat promise.
+        // No-op — we wait on the awaited streamChat promise.
       },
       onError: (e) => {
         // Re-throw via classifyError so the caller (chat.ts) can surface
@@ -103,46 +185,45 @@ export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticL
       },
     });
 
-    // The returned `blocks` carry text + tool_use blocks in arrival order.
-    // For tool_use blocks, copy them into our MessageBlock mirror.
+    turns++;
+    lastBlocks = turnResult.blocks;
+    stopReason = turnResult.stopReason;
+
+    // Mirror text + tool_use blocks into the MessageBlock[] we return to the
+    // caller. The renderer owns the streaming text (via onToken), so we
+    // don't re-push text blocks here; tool_use blocks DO need to be mirrored
+    // so the renderer can show inline tool_use pills (per Phase 2 plan).
     for (const cb of turnResult.blocks) {
-      if (cb.type === 'text') {
-        // Text content is already streamed via onToken; we don't mirror it
-        // into `blocks` because the renderer owns the streaming text.
-      } else if (cb.type === 'tool_use') {
-        blocks.push({ kind: 'tool_use', id: cb.id, name: cb.name, input: cb.input });
+      if (cb.type === 'tool_use') {
+        const tu = cb as Anthropic.Messages.ToolUseBlock;
+        blocks.push({ kind: 'tool_use', id: tu.id, name: tu.name, input: tu.input });
       }
     }
 
-    // Final turn — no tool_use; append the assistant text block and return.
-    if (turnResult.stopReason !== 'tool_use') {
-      blocks.push({ kind: 'text', text: fullText });
-      return { text: fullText, toolCalls, blocks };
-    }
-
     // Append the assistant turn's content blocks to `messages` so the next
-    // SDK call sees them. Use the Anthropic-shaped ContentBlock[] (text +
-    // tool_use) under the `anthropicBlocks` typed carrier.
-    const assistantContent: Anthropic.Messages.ContentBlock[] = turnResult.blocks.map((cb) => cb);
-    messages.push({
-      ts: Date.now(),
-      role: 'assistant',
-      content: '',
-      anthropicBlocks: assistantContent,
-    });
+    // SDK call sees them. Use the Anthropic-shaped ContentBlock[] under the
+    // typed carrier — `appendAssistantBlocks` skips empty arrays.
+    appendAssistantBlocks(messages, turnResult.blocks);
+
+    // Final turn — no tool_use; append the assistant text block and return.
+    if (stopReason !== 'tool_use') {
+      blocks.push({ kind: 'text', text: fullText });
+      return { text: fullText, toolCalls, blocks, turns };
+    }
 
     // Dispatch each tool_use, collect tool_result blocks, append to messages.
     const toolResultBlocks: Anthropic.Messages.ToolResultBlockParam[] = [];
     for (const cb of turnResult.blocks) {
       if (cb.type !== 'tool_use') continue;
+      const tu = cb as Anthropic.Messages.ToolUseBlock;
 
       let output = '';
       let isError = false;
       try {
         const resp = await callTool(
-          cb.name,
-          (cb.input ?? {}) as Record<string, unknown>,
-          { toolCallId: cb.id, bot },
+          tu.name,
+          (tu.input ?? {}) as Record<string, unknown>,
+          { toolCallId: tu.id, bot },
         );
         // JSON-RPC envelope: result on success, error on failure.
         const err = (resp as { error?: { code?: unknown; message?: unknown } }).error;
@@ -160,29 +241,30 @@ export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticL
         output = `Error: ${errorMessage(e)}`;
       }
 
-      toolCalls.push({ id: cb.id, name: cb.name, input: cb.input, output, isError });
-      blocks.push({ kind: 'tool_result', toolUseId: cb.id, content: output, isError });
+      toolCalls.push({ id: tu.id, name: tu.name, input: tu.input, output, isError });
+      blocks.push({ kind: 'tool_result', toolUseId: tu.id, content: output, isError });
       toolResultBlocks.push({
         type: 'tool_result',
-        tool_use_id: cb.id,
+        tool_use_id: tu.id,
         content: output,
         is_error: isError,
       });
-      opts.onToolResult({ toolUseId: cb.id, content: output, isError });
+      opts.onToolResult({ toolUseId: tu.id, content: output, isError });
     }
 
     // Append a synthetic user turn carrying the tool_results back to the LLM.
-    messages.push({
-      ts: Date.now(),
-      role: 'user',
-      content: '',
-      anthropicBlocks: toolResultBlocks as unknown as Anthropic.Messages.ContentBlock[],
-    });
+    appendToolResult(messages, toolResultBlocks);
   }
 
   // If we exit the loop, maxTurns was exceeded while still emitting tool_use.
   // Surface as a fatal error in the error category — caller maps this to
-  // EVENT_MESSAGE_ERROR {category:'fatal', retryable:false}.
+  // EVENT_MESSAGE_ERROR {category:'fatal', retryable:false}. The optional
+  // onError hook is fired first so future consumers (status bar, log
+  // surfaces) can react even when the caller swallows the throw.
+  // We also push a final text block with whatever was streamed (likely empty
+  // for a runaway loop), so the renderer's blocks table is consistent.
+  blocks.push({ kind: 'text', text: fullText });
+  void lastBlocks; // lastBlocks is read for symmetry with the natural-completion path
   const fatal = new Error(`agentic loop exceeded maxTurns=${maxTurns}`) as Error & {
     category: string;
     retryable: boolean;
@@ -194,5 +276,13 @@ export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticL
   const wrapped = new Error(classified.message) as Error & { category?: string; retryable?: boolean };
   wrapped.category = classified.category;
   wrapped.retryable = classified.retryable;
+  if (opts.onError) {
+    try {
+      opts.onError(wrapped);
+    } catch {
+      // Never let an onError handler take down the loop; the throw below is
+      // the source of truth for maxTurns failure.
+    }
+  }
   throw wrapped;
 }
