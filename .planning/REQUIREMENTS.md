@@ -20,11 +20,11 @@
 
 ### LLM Integration
 
-- [ ] **LLM-01**: App talks to MiniMax M3 API via Anthropic-compatible /v1/messages endpoint
-- [ ] **LLM-02**: App streams tokens from the LLM to the chat UI in real time
+- [x] **LLM-01**: App talks to MiniMax M3 API via Anthropic-compatible /v1/messages endpoint
+- [x] **LLM-02**: App streams tokens from the LLM to the chat UI in real time
 - [ ] **LLM-03**: Agentic loop handles tool_use blocks (execute tool, append tool_result, continue)
 - [ ] **LLM-04**: Token budget tracking with automatic conversation summarization when approaching context limit
-- [ ] **LLM-05**: API key stored locally (not in renderer, not on disk in plaintext — OS keychain)
+- [x] **LLM-05**: API key stored locally (not in renderer, not on disk in plaintext — OS keychain)
 
 ### Built-in Tools
 
@@ -52,16 +52,16 @@
 
 ### Security
 
-- [ ] **SEC-01**: Tool daemon runs as a separate child process from Electron main; main never touches user shell directly
+- [x] **SEC-01**: Tool daemon runs as a separate child process from Electron main; main never touches user shell directly
 - [ ] **SEC-02**: Per-bot tool allowlist + denylist enforced in the daemon, not the agent
 - [ ] **SEC-03**: Global command denylist (e.g., `rm -rf /`, `sudo *`, `curl * | bash`) checked before per-bot policy
-- [ ] **SEC-04**: All tool calls logged to a shared audit log with timestamp, bot name, tool name, params
-- [ ] **SEC-05**: API key never exposed to renderer; LLM calls proxied through Electron main
+- [x] **SEC-04**: All tool calls logged to a shared audit log with timestamp, bot name, tool name, params
+- [x] **SEC-05**: API key never exposed to renderer; LLM calls proxied through Electron main
 
 ### UI
 
 - [ ] **UI-01**: Bot sidebar showing name, status indicator, last-run time
-- [ ] **UI-02**: Chat pane with streaming assistant text
+- [x] **UI-02**: Chat pane with streaming assistant text
 - [ ] **UI-03**: Tool-call visual blocks (name + params + result) inline in the chat
 - [ ] **UI-04**: Approval modal for shell command execution (command preview, Allow Once / Always Allow / Deny)
 - [ ] **UI-05**: "New Bot" creation modal with template fields
@@ -132,11 +132,11 @@ Deferred to future release.
 | AGENT-08 | Phase 4 | Pending |
 | AGENT-09 | Phase 6 | Pending |
 | AGENT-10 | Phase 6 | Pending |
-| LLM-01 | Phase 1 | Pending |
-| LLM-02 | Phase 1 | Pending |
+| LLM-01 | Phase 1 | Complete |
+| LLM-02 | Phase 1 | Complete |
 | LLM-03 | Phase 2 | Pending |
 | LLM-04 | Phase 3 | Pending |
-| LLM-05 | Phase 1 | Pending |
+| LLM-05 | Phase 1 | Complete |
 | TOOL-01 | Phase 2 | Pending |
 | TOOL-02 | Phase 2 | Pending |
 | TOOL-03 | Phase 2 | Pending |
@@ -155,13 +155,13 @@ Deferred to future release.
 | OBS-04 | Phase 7 | Pending |
 | OBS-05 | Phase 7 | Pending |
 | OBS-06 | Phase 7 | Pending |
-| SEC-01 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
 | SEC-02 | Phase 2 | Pending |
 | SEC-03 | Phase 5 | Pending |
-| SEC-04 | Phase 1 | Pending |
-| SEC-05 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Complete |
+| SEC-05 | Phase 1 | Complete |
 | UI-01 | Phase 4 | Pending |
-| UI-02 | Phase 1 | Pending |
+| UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 2 | Pending |
 | UI-04 | Phase 5 | Pending |
 | UI-05 | Phase 4 | Pending |
@@ -183,4 +183,4 @@ Deferred to future release.
 ---
 
 *Requirements defined: 2026-09-17*
-*Last updated: 2026-09-17 after roadmap creation*
+*Last updated: 2026-09-17 after Phase 1 execution*

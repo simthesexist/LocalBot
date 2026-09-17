@@ -2,7 +2,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Skeleton + Streaming Chat** - Electron + React shell, M3 API streaming chat, keychain + tool daemon foundation
+- [x] **Phase 1: Skeleton + Streaming Chat** - Electron + React shell, M3 API streaming chat, keychain + tool daemon foundation
 - [ ] **Phase 2: File Tools + Search + Tool System** - read/write/edit/list/code_search via per-bot allowlisted tool daemon with inline UI blocks
 - [ ] **Phase 3: Memory + Conversation History** - Persistent markdown+JSON memory, JSONL history, token-budget summarization, workspace file tree
 - [ ] **Phase 4: Multi-Bot CRUD + Sidebar** - Create/list/edit/delete/run/cancel bots with sidebar, modals, settings, run history
@@ -26,8 +26,8 @@
   4. Tool daemon runs as a separate child process from Electron main; main never spawns user shell commands directly
   5. Every tool invocation is written to a shared audit log with timestamp, bot, tool name, and params
 **Plans**: 2 plans
-- [ ] `01-01-PLAN.md` — Walking-skeleton tracer: scaffold Electron + React 19 + Vite + TypeScript, wire safeStorage key onboarding, stdio JSON-RPC tool daemon, streaming IPC with msgId-keyed AbortController, chat-bubble UI, single global session JSONL, audit-log writer; layer cancel + retry + daemon auto-respawn + error banners.
-- [ ] `01-02-PLAN.md` — Test infrastructure: Vitest unit suites for NDJSON framing, session JSONL serialization, safeStorage round-trip; Playwright Electron smoke (fake M3 → first-launch key modal → streamed token); Playwright daemon smoke (spawn real daemon → `tools/call` → audit JSONL line under temp `userData`).
+- [x] `01-01-PLAN.md` — Walking-skeleton tracer: scaffold Electron + React 19 + Vite + TypeScript, wire safeStorage key onboarding, stdio JSON-RPC tool daemon, streaming IPC with msgId-keyed AbortController, chat-bubble UI, single global session JSONL, audit-log writer; layer cancel + retry + daemon auto-respawn + error banners.
+- [x] `01-02-PLAN.md` — Test infrastructure: Vitest unit suites for NDJSON framing, session JSONL serialization, safeStorage round-trip; Playwright Electron smoke (fake M3 → first-launch key modal → streamed token); Playwright daemon smoke (spawn real daemon → `tools/call` → audit JSONL line under temp `userData`).
 **UI hint**: yes
 
 ### Phase 2: File Tools + Search + Tool System
@@ -143,7 +143,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton + Streaming Chat | 0/2 | Planned | - |
+| 1. Skeleton + Streaming Chat | 2/2 | Complete | 2026-09-17 |
 | 2. File Tools + Search + Tool System | 0/0 | Not started | - |
 | 3. Memory + Conversation History | 0/0 | Not started | - |
 | 4. Multi-Bot CRUD + Sidebar | 0/0 | Not started | - |
