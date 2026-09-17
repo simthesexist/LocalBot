@@ -2,6 +2,10 @@
 // Reuses the real Anthropic SSE envelope so the official SDK parses the
 // response cleanly. Exported as a CommonJS-compatible module via `module.exports`
 // (Playwright's test runner is CJS-aware).
+//
+// Phase 2 Wave 3: extended with streamToolUseResponse({name, input,
+// followupText}) for the smoke-tools test that exercises a tool_use round
+// trip end-to-end.
 
 import http from 'node:http';
 
@@ -88,8 +92,90 @@ function streamTextResponse(res: http.ServerResponse, text: string): Promise<voi
   return writeSse(res, chunks);
 }
 
+interface StreamToolUseOpts {
+  name: string;
+  input: Record<string, unknown>;
+  followupText: string;
+}
+
+function streamToolUseResponse(
+  res: http.ServerResponse,
+  opts: StreamToolUseOpts,
+): Promise<void> {
+  const toolUseId = `toolu_fake_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(opts.input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 12;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = opts.followupText.split(/(\s+)/).filter(Boolean);
+
+  const chunks: string[] = [];
+  chunks.push(
+    sseFrame('message_start', {
+      type: 'message_start',
+      message: {
+        id: 'msg_fake_tool',
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        model: 'MiniMax/M3',
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 5, output_tokens: 0 },
+      },
+    }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: toolUseId, name: opts.name, input: {} },
+    }),
+  );
+  inputChunks.forEach((chunk) => {
+    chunks.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: chunk },
+      }),
+    );
+  });
+  chunks.push(
+    sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'text', text: '' },
+    }),
+  );
+  tokens.forEach((tok) => {
+    chunks.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'text_delta', text: tok },
+      }),
+    );
+  });
+  chunks.push(
+    sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+    sseFrame('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: 'tool_use', stop_sequence: null },
+    }),
+    sseFrame('message_stop', { type: 'message_stop' }),
+  );
+  return writeSse(res, chunks);
+}
+
 export async function createFakeM3Server(): Promise<FakeM3Server> {
-  let requestCount = 0;
+  // Per-server overrides for the smoke-tools test. When set, every POST is
+  // answered with the matching streamToolUseResponse, regardless of tools
+  // payload. Undefined = fall back to streamTextResponse based on probe shape.
+  let forcedToolUse: StreamToolUseOpts | null = null;
+  let forcedStream: 'text' | 'tool_use' = 'text';
+
   const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -105,13 +191,13 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
       res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 only handles /v1/messages' } }));
       return;
     }
-    requestCount++;
-
     let body = '';
     req.on('data', (chunk) => {
       body += chunk.toString('utf8');
     });
     req.on('end', () => {
+      // Only count requests we actually accept.
+      res.statusCode = 200;
       let parsed: any = {};
       try {
         parsed = body ? JSON.parse(body) : {};
@@ -121,23 +207,45 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
         return;
       }
 
-      res.writeHead(200, SSE_HEADERS);
-
       const maxTokens: number = parsed.max_tokens ?? 0;
       const userText: string =
         Array.isArray(parsed.messages) && parsed.messages.length > 0
           ? parsed.messages[parsed.messages.length - 1]?.content ?? ''
           : '';
+      const hasTools = Array.isArray(parsed.tools) && parsed.tools.length > 0;
 
-      // The key probe calls messages.create with max_tokens:1 and content 'ping'.
-      if (maxTokens === 1 || userText === 'ping') {
-        // Reply with one delta token "ok" + a short completion.
-        void streamTextResponse(res, 'ok');
-      } else {
-        // Real chat response: a friendly greeting so the smoke test sees a
-        // visible token in the bubble.
-        void streamTextResponse(res, 'Hello from fake M3');
+      // Increment request count atomically (after parse but before stream).
+      requestCount++;
+
+      res.writeHead(200, SSE_HEADERS);
+
+      // ── Per-server forced response (set by smoke-tools.test.ts). ──
+      if (forcedStream === 'tool_use' && forcedToolUse) {
+        void streamToolUseResponse(res, forcedToolUse);
+        return;
       }
+
+      // ── Default routing: probe vs real chat. ──
+      if (maxTokens === 1 || userText === 'ping') {
+        void streamTextResponse(res, 'ok');
+        return;
+      }
+
+      // Real chat: if the request includes a `tools` array AND the user text
+      // explicitly asks for a tool_use response (e.g. "read hello.txt"),
+      // emit a tool_use envelope instead. This keeps the test self-contained
+      // without requiring the smoke test to mutate server state.
+      if (hasTools && /read /.test(userText)) {
+        const toolUseOpts: StreamToolUseOpts = {
+          name: 'read_file',
+          input: { path: 'hello.txt' },
+          followupText: 'Reading hello.txt now.',
+        };
+        void streamToolUseResponse(res, toolUseOpts);
+        return;
+      }
+
+      void streamTextResponse(res, 'Hello from fake M3');
     });
   });
 
@@ -148,6 +256,8 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
   }
   const port = addr.port;
   const url = `http://127.0.0.1:${port}`;
+
+  let requestCount = 0;
   return {
     url,
     port,
@@ -157,7 +267,12 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
     getRequestCount() {
       return requestCount;
     },
-  };
+    // Internal hook for smoke-tools.test.ts — bypass the default routing.
+    __forceToolUse: (opts: StreamToolUseOpts) => {
+      forcedToolUse = opts;
+      forcedStream = 'tool_use';
+    },
+  } as FakeM3Server & { __forceToolUse: (opts: StreamToolUseOpts) => void };
 }
 
 module.exports = { createFakeM3Server };
