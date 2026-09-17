@@ -120,17 +120,67 @@ Deferred to future release.
 
 ## Traceability
 
-Filled in during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(populated by gsd-roadmapper)_ | | |
+| AGENT-01 | Phase 4 | Pending |
+| AGENT-02 | Phase 4 | Pending |
+| AGENT-03 | Phase 4 | Pending |
+| AGENT-04 | Phase 4 | Pending |
+| AGENT-05 | Phase 3 | Pending |
+| AGENT-06 | Phase 3 | Pending |
+| AGENT-07 | Phase 4 | Pending |
+| AGENT-08 | Phase 4 | Pending |
+| AGENT-09 | Phase 6 | Pending |
+| AGENT-10 | Phase 6 | Pending |
+| LLM-01 | Phase 1 | Pending |
+| LLM-02 | Phase 1 | Pending |
+| LLM-03 | Phase 2 | Pending |
+| LLM-04 | Phase 3 | Pending |
+| LLM-05 | Phase 1 | Pending |
+| TOOL-01 | Phase 2 | Pending |
+| TOOL-02 | Phase 2 | Pending |
+| TOOL-03 | Phase 2 | Pending |
+| TOOL-04 | Phase 2 | Pending |
+| TOOL-05 | Phase 2 | Pending |
+| TOOL-06 | Phase 5 | Pending |
+| TOOL-07 | Phase 8 | Pending |
+| TOOL-08 | Phase 8 | Pending |
+| TOOL-09 | Phase 8 | Pending |
+| TOOL-10 | Phase 8 | Pending |
+| TOOL-11 | Phase 8 | Pending |
+| TOOL-12 | Phase 8 | Pending |
+| OBS-01 | Phase 7 | Pending |
+| OBS-02 | Phase 7 | Pending |
+| OBS-03 | Phase 7 | Pending |
+| OBS-04 | Phase 7 | Pending |
+| OBS-05 | Phase 7 | Pending |
+| OBS-06 | Phase 7 | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 2 | Pending |
+| SEC-03 | Phase 5 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| SEC-05 | Phase 1 | Pending |
+| UI-01 | Phase 4 | Pending |
+| UI-02 | Phase 1 | Pending |
+| UI-03 | Phase 2 | Pending |
+| UI-04 | Phase 5 | Pending |
+| UI-05 | Phase 4 | Pending |
+| UI-06 | Phase 4 | Pending |
+| UI-07 | Phase 4 | Pending |
+| UI-08 | Phase 3 | Pending |
+| NET-01 | Phase 9 | Pending |
+| NET-02 | Phase 9 | Pending |
+| NET-03 | Phase 9 | Pending |
+| NET-04 | Phase 9 | Pending |
+| PKG-01 | Phase 9 | Pending |
+| PKG-02 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 52 total
-- Mapped to phases: 0
-- Unmapped: 52 ⚠
+- Mapped to phases: 52
+- Unmapped: 0 ✓
 
 ---
+
 *Requirements defined: 2026-09-17*
-*Last updated: 2026-09-17 after initial definition*
+*Last updated: 2026-09-17 after roadmap creation*
