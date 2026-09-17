@@ -1,11 +1,14 @@
-// Path helpers — all paths live under app.getPath('userData').
+// Path helpers — all paths live under app.getPath('userData') unless
+// LOCALBOT_USER_DATA_DIR is set in the environment (used by tests).
 
 import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
 export function userDataDir(): string {
-  return app.getPath('userData');
+  // Honor the env override used by tests + smoke runs. Default to Electron's
+  // canonical userData path when the env var is absent.
+  return process.env.LOCALBOT_USER_DATA_DIR || app.getPath('userData');
 }
 
 export function auditDir(): string {

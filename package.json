@@ -12,7 +12,10 @@
     "build:renderer": "vite build",
     "build:main": "tsc -p tsconfig.main.json",
     "start": "electron dist/main/index.js",
-    "test": "vitest"
+    "test": "vitest run --reporter=default",
+    "test:watch": "vitest",
+    "test:smoke": "playwright test",
+    "test:all": "npm test && npm run test:smoke"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.1"
@@ -29,6 +32,7 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
+    "vitest": "^2.1.9",
     "wait-on": "^8.0.1"
   }
 }

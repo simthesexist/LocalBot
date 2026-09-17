@@ -1,11 +1,13 @@
-// safeStorage-backed key persistence.
+// safeStorage-backed key persistence — IPC handlers + small probe helper.
+// The encrypt/decrypt primitives live in `../keychain` so unit tests can
+// import them without instantiating ipcMain.
 
-import { ipcMain, safeStorage, BrowserWindow } from 'electron';
-import fs from 'node:fs/promises';
+import { ipcMain, BrowserWindow } from 'electron';
 import { existsSync } from 'node:fs';
 import Anthropic from '@anthropic-ai/sdk';
 import { CHANNELS } from '../../shared/ipc-channels';
 import { keyFilePath } from '../paths';
+import { encryptToFile, decryptFromFile, KeychainError } from '../keychain';
 import { classifyError } from '../errors';
 import type { KeyClearResult, KeyGetResult, KeyProbeResult, KeySetResult } from '../../shared/types';
 
@@ -13,17 +15,13 @@ export async function hasStoredKey(): Promise<boolean> {
   return existsSync(keyFilePath());
 }
 
-async function readDecryptedKey(): Promise<string | null> {
-  if (!existsSync(keyFilePath())) return null;
-  if (!safeStorage.isEncryptionAvailable()) return null;
-  const buf = await fs.readFile(keyFilePath());
-  const cipherB64 = buf.toString('utf8');
-  const cipher = Buffer.from(cipherB64, 'base64');
-  return safeStorage.decryptString(cipher);
+export async function readDecryptedKey(): Promise<string | null> {
+  return decryptFromFile(keyFilePath());
 }
 
 export async function clearStoredKey(): Promise<void> {
   if (existsSync(keyFilePath())) {
+    const fs = await import('node:fs/promises');
     await fs.unlink(keyFilePath());
   }
 }
@@ -55,13 +53,15 @@ export function registerKeyHandlers(): void {
     if (!payload?.key || typeof payload.key !== 'string') {
       return { ok: false, error: 'missing key' };
     }
-    if (!safeStorage.isEncryptionAvailable()) {
-      return { ok: false, error: 'safeStorage encryption unavailable on this system' };
+    try {
+      await encryptToFile(keyFilePath(), payload.key);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof KeychainError) {
+        return { ok: false, error: err.message };
+      }
+      return { ok: false, error: (err as Error).message ?? 'unknown error' };
     }
-    const cipher = safeStorage.encryptString(payload.key);
-    const cipherB64 = Buffer.from(cipher).toString('base64');
-    await fs.writeFile(keyFilePath(), cipherB64, 'utf8');
-    return { ok: true };
   });
 
   ipcMain.handle(CHANNELS.KEY_PROBE, async (_evt, payload: { key: string }): Promise<KeyProbeResult> => {
@@ -77,5 +77,3 @@ export function registerKeyHandlers(): void {
     return { ok: true };
   });
 }
-
-export { readDecryptedKey };
