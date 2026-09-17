@@ -25,7 +25,9 @@
   3. API key is stored in the OS keychain (never in plaintext on disk, never exposed to the renderer)
   4. Tool daemon runs as a separate child process from Electron main; main never spawns user shell commands directly
   5. Every tool invocation is written to a shared audit log with timestamp, bot, tool name, and params
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] `01-01-PLAN.md` — Walking-skeleton tracer: scaffold Electron + React 19 + Vite + TypeScript, wire safeStorage key onboarding, stdio JSON-RPC tool daemon, streaming IPC with msgId-keyed AbortController, chat-bubble UI, single global session JSONL, audit-log writer; layer cancel + retry + daemon auto-respawn + error banners.
+- [ ] `01-02-PLAN.md` — Test infrastructure: Vitest unit suites for NDJSON framing, session JSONL serialization, safeStorage round-trip; Playwright Electron smoke (fake M3 → first-launch key modal → streamed token); Playwright daemon smoke (spawn real daemon → `tools/call` → audit JSONL line under temp `userData`).
 **UI hint**: yes
 
 ### Phase 2: File Tools + Search + Tool System
@@ -141,7 +143,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Skeleton + Streaming Chat | 0/0 | Not started | - |
+| 1. Skeleton + Streaming Chat | 0/2 | Planned | - |
 | 2. File Tools + Search + Tool System | 0/0 | Not started | - |
 | 3. Memory + Conversation History | 0/0 | Not started | - |
 | 4. Multi-Bot CRUD + Sidebar | 0/0 | Not started | - |
