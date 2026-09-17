@@ -146,6 +146,12 @@ html, body, #root {
   color: var(--color-error-text);
 }
 
+.block-result-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
 .block-tool-use-header {
   margin-bottom: 4px;
 }
@@ -171,7 +177,8 @@ html, body, #root {
   line-height: 1.4;
 }
 
-.block-show-more {
+.block-show-more,
+.collapse-toggle {
   margin-top: 4px;
   background: transparent;
   border: none;
@@ -180,6 +187,11 @@ html, body, #root {
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+  font-family: var(--font-sans);
+}
+
+.collapse-toggle:hover {
+  text-decoration: none;
 }
 
 .inline-retry {
