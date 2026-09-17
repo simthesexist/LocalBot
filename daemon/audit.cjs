@@ -6,10 +6,15 @@ const path = require('node:path');
 
 let userDataDir = null;
 let cachedStream = null;
+let currentBotId = null;
 
 function setUserDataDir(dir) {
   userDataDir = dir;
   cachedStream = null;
+}
+
+function setCurrentBot(botId) {
+  currentBotId = botId;
 }
 
 function utcDateString() {
@@ -33,7 +38,12 @@ function getStream(date) {
 function appendAudit(line) {
   if (!userDataDir) return;
   const date = utcDateString();
-  const record = { ts: new Date().toISOString(), bot: 'daemon', ...line };
+  // Resolve bot priority: explicit line.bot > initialize state.bot > 'default' fallback.
+  // The 'daemon' constant is REMOVED — every audit line must carry the actual bot id.
+  const botId = (line && typeof line.bot === 'string' && line.bot.length > 0)
+    ? line.bot
+    : (currentBotId || 'default');
+  const record = { ts: new Date().toISOString(), bot: botId, ...line };
   const stream = getStream(date);
   stream.write(JSON.stringify(record) + '\n');
 }
@@ -44,4 +54,4 @@ process.on('exit', () => {
   }
 });
 
-module.exports = { appendAudit, setUserDataDir };
+module.exports = { appendAudit, setUserDataDir, setCurrentBot };

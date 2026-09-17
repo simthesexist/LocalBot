@@ -153,10 +153,12 @@ test('daemon tools/call writes one NDJSON audit line with unknown_tool error', a
     .filter(Boolean);
 
   // At least one line must match the canonical shape from D-12.
+  // Phase 2: bot defaults to 'default' when initialize doesn't pass params.bot
+  // (the previous 'daemon' constant is removed per Plan 02-01 §B).
   const echoLine = lines.find(
     (l: any) =>
       l.tool === 'echo' &&
-      l.bot === 'daemon' &&
+      l.bot === 'default' &&
       l.outcome === 'error' &&
       l.error?.code === 'unknown_tool' &&
       typeof l.durationMs === 'number' &&

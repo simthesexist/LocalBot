@@ -5,7 +5,11 @@ const { writeMessage, readMessage } = require('./protocol.cjs');
 const registry = require('./tools/registry.cjs');
 const audit = require('./audit.cjs');
 
-const SERVER_INFO = { server: 'localbot-daemon', version: '0.1.0', tools: [] };
+// Phase 2: per-bot policy lives in the daemon; the orchestrator (main)
+// forwards params.bot on initialize and params.bot on every tools/call.
+// The 'tools' field in SERVER_INFO is a placeholder list of *names* (Phase 1
+// compat). The full schemas come from registry.listTools().
+const SERVER_INFO = { server: 'localbot-daemon', version: '0.2.0', tools: [] };
 
 let nextId = 1;
 const pendingReady = { resolve: null, reject: null };
@@ -23,14 +27,18 @@ function replyResult(id, result) {
 }
 
 // Handshake: write { kind: 'ready' } as the very first line.
-writeMessage(process.stdout, { kind: 'ready', version: '0.1.0' });
+writeMessage(process.stdout, { kind: 'ready', version: '0.2.0' });
 
 const rl = readline.createInterface({ input: process.stdin });
+
+// Phase 2: workspaceRoot is latched on initialize and threaded into every
+// tools/call ctx. It MUST NOT come from any caller other than initialize.
+let workspaceRoot = null;
+let currentBot = 'default';
 
 rl.on('line', async (line) => {
   const obj = readMessage(line);
   if (!obj) {
-    // Malformed line. Send a parse error with id=null (JSON-RPC 2.0 §5.1).
     reply({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
     return;
   }
@@ -42,6 +50,13 @@ rl.on('line', async (line) => {
       case 'initialize': {
         if (params && typeof params.userDataDir === 'string') {
           audit.setUserDataDir(params.userDataDir);
+        }
+        if (params && typeof params.workspaceRoot === 'string') {
+          workspaceRoot = params.workspaceRoot;
+        }
+        if (params && typeof params.bot === 'string') {
+          currentBot = params.bot;
+          audit.setCurrentBot(params.bot);
         }
         replyResult(id, { ...SERVER_INFO, tools: registry.listTools() });
         break;
@@ -55,32 +70,49 @@ rl.on('line', async (line) => {
       case 'tools/call': {
         const name = (params && params.name) || 'unknown';
         const args = (params && params.arguments) || {};
+        const bot = (params && typeof params.bot === 'string') ? params.bot : currentBot;
+        const toolCallId = (params && typeof params.toolCallId === 'string')
+          ? params.toolCallId
+          : undefined;
         const startedAt = Date.now();
         let outcome = 'ok';
         let errPayload = undefined;
         try {
-          const result = await registry.callTool(name, args);
+          const result = await registry.callTool(bot, name, args, {
+            workspaceRoot,
+            toolCallId,
+            bot,
+          });
           replyResult(id, result);
         } catch (err) {
           outcome = 'error';
-          errPayload = { code: err.code || 'unknown_tool', message: err.message };
-          replyError(id, err.code || 'unknown_tool', err.message);
+          errPayload = {
+            code: err.code || 'unknown_tool',
+            message: err.message,
+            ...(err.reason ? { reason: err.reason } : {}),
+          };
+          // Use the error code as the JSON-RPC error code (string codes are
+          // valid per JSON-RPC 2.0 §5.1 when used in extension envelopes;
+            // existing Phase 1 Playwright smoke asserts `code: 'unknown_tool'`).
+          replyError(id, errPayload.code, errPayload.message);
         } finally {
           const durationMs = Date.now() - startedAt;
           audit.appendAudit({
             tool: name,
+            bot,
             params: args,
             outcome,
             durationMs,
             error: errPayload,
+            tool_use_id: toolCallId,
           });
         }
         break;
       }
 
       case 'tools/cancel': {
-        // Phase 1 stub — no in-flight tools to cancel. Acknowledge.
-        replyResult(id, { cancelled: true });
+        const toolCallId = (params && typeof params.toolCallId === 'string') ? params.toolCallId : '';
+        replyResult(id, registry.cancelToolCall(toolCallId));
         break;
       }
 
