@@ -2,14 +2,15 @@
 gsd_state_version: "1.0"
 status: unknown
 stopped_at: Phase 1 context gathered
-last_updated: "2026-09-17T19:55:26.836Z"
-state_head: 063643cf6dbc4bd819c479032da9443f3a0a71f3
+last_updated: "2026-09-17T20:44:18.239Z"
+state_head: 39af6f319322be91658ba508f9dc926436c1dbb5
 progress:
   total_phases: 9
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
+current_phase_name: skeleton-streaming-chat
 ---
 
 # State: Localbot
