@@ -1,5 +1,6 @@
 // A single chat message bubble.
 
+import * as React from 'react';
 import { useMemo } from 'react';
 import type { ChatMessage } from '../../shared/types';
 
@@ -7,7 +8,7 @@ export interface MessageBubbleProps {
   message: ChatMessage;
 }
 
-function renderInline(text: string): JSX.Element {
+function renderInline(text: string): React.JSX.Element {
   // Light inline markdown-ish rendering for code spans + bold only.
   // Avoids extra deps. Splits on backtick code spans.
   const parts = text.split(/(`[^`]+`)/g);

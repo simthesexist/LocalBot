@@ -2,19 +2,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 import { CHANNELS } from '../../shared/ipc-channels';
-import type {
-  AppInitPayload,
-  DaemonStatus,
-  DoneEvent,
-  ErrorEvent,
-  KeyClearResult,
-  KeyGetResult,
-  KeyProbeResult,
-  KeySetResult,
-  TokenEvent,
-  ToolResultEvent,
-  ToolUseEvent,
-} from '../../shared/types';
+import type { LocalbotApi, LocalbotChannel } from '../../shared/window';
 
 const EVENT_CHANNELS = new Set<string>([
   CHANNELS.EVENT_MESSAGE_TOKEN,
@@ -35,53 +23,18 @@ function on(channel: string, handler: (payload: any) => void): () => void {
   return () => ipcRenderer.removeListener(channel, wrapped);
 }
 
-const api = {
-  sendMessage: (content: string, msgId: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke(CHANNELS.SEND_MESSAGE, { content, msgId }),
-  cancel: (msgId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke(CHANNELS.CANCEL, msgId),
+const api: LocalbotApi = {
+  sendMessage: (content, msgId) => ipcRenderer.invoke(CHANNELS.SEND_MESSAGE, { content, msgId }),
+  cancel: (msgId) => ipcRenderer.invoke(CHANNELS.CANCEL, msgId),
   key: {
-    get: (): Promise<KeyGetResult> => ipcRenderer.invoke(CHANNELS.KEY_GET),
-    set: (key: string): Promise<KeySetResult> => ipcRenderer.invoke(CHANNELS.KEY_SET, { key }),
-    probe: (key: string): Promise<KeyProbeResult> => ipcRenderer.invoke(CHANNELS.KEY_PROBE, { key }),
-    clear: (): Promise<KeyClearResult> => ipcRenderer.invoke(CHANNELS.KEY_CLEAR),
+    get: () => ipcRenderer.invoke(CHANNELS.KEY_GET),
+    set: (key) => ipcRenderer.invoke(CHANNELS.KEY_SET, { key }),
+    probe: (key) => ipcRenderer.invoke(CHANNELS.KEY_PROBE, { key }),
+    clear: () => ipcRenderer.invoke(CHANNELS.KEY_CLEAR),
   },
-  on,
+  on: ((channel: LocalbotChannel, handler: (payload: any) => void) => {
+    return on(channel, handler);
+  }) as LocalbotApi['on'],
 };
 
 contextBridge.exposeInMainWorld('localbot', api);
-
-// Type declarations for renderer.
-declare global {
-  interface Window {
-    localbot: {
-      sendMessage: (content: string, msgId: string) => Promise<{ ok: boolean; error?: string }>;
-      cancel: (msgId: string) => Promise<{ ok: boolean }>;
-      key: {
-        get: () => Promise<KeyGetResult>;
-        set: (key: string) => Promise<KeySetResult>;
-        probe: (key: string) => Promise<KeyProbeResult>;
-        clear: () => Promise<KeyClearResult>;
-      };
-      on: (
-        channel:
-          | typeof CHANNELS.EVENT_MESSAGE_TOKEN
-          | typeof CHANNELS.EVENT_MESSAGE_DONE
-          | typeof CHANNELS.EVENT_MESSAGE_ERROR
-          | typeof CHANNELS.EVENT_MESSAGE_TOOL_USE
-          | typeof CHANNELS.EVENT_MESSAGE_TOOL_RESULT
-          | typeof CHANNELS.EVENT_DAEMON_STATUS
-          | typeof CHANNELS.EVENT_APP_INIT,
-        handler: (
-          payload:
-            | TokenEvent
-            | DoneEvent
-            | ErrorEvent
-            | ToolUseEvent
-            | ToolResultEvent
-            | DaemonStatus
-            | AppInitPayload,
-        ) => void,
-      ) => () => void;
-    };
-  }
-}

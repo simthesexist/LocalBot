@@ -3,12 +3,19 @@
 import { useEffect, useRef } from 'react';
 import { Composer } from './Composer';
 import { MessageBubble } from './MessageBubble';
+import { MessageBlock } from './MessageBlock';
 import { ErrorBanner } from './ErrorBanner';
 import { useMessages } from '../state/messages';
-import type { ChatMessage } from '../../shared/types';
+import type { ChatMessage, MessageBlock as MessageBlockT } from '../../shared/types';
 
 export interface ChatProps {
   initialMessages: ChatMessage[];
+}
+
+function blocksForMessage(m: ChatMessage): MessageBlockT[] {
+  if (m.blocks && m.blocks.length > 0) return m.blocks;
+  // Back-compat: legacy rows / streaming text → wrap content as a single text block.
+  return [{ kind: 'text', text: m.content ?? '' }];
 }
 
 export function Chat({ initialMessages }: ChatProps) {
@@ -17,6 +24,7 @@ export function Chat({ initialMessages }: ChatProps) {
     streaming,
     activeMsgId,
     pendingAssistantContent,
+    pendingBlocks,
     error,
     daemonStatus,
     setMessages,
@@ -43,7 +51,6 @@ export function Chat({ initialMessages }: ChatProps) {
   }, [messages, pendingAssistantContent]);
 
   const onRetry = async () => {
-    // Re-send the last user message.
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     if (!lastUser) return;
     clearError();
@@ -91,47 +98,74 @@ export function Chat({ initialMessages }: ChatProps) {
         )}
 
         <div className="message-list" ref={listRef}>
-          {messages.map((m) => (
-            <div key={(m.msgId ?? `${m.ts}-${m.role}`)}>
-              <MessageBubble message={m} />
-              {m.interrupted && m.role === 'assistant' && (
-                <div className="bubble-footer">
-                  <span>Stream interrupted — </span>
-                  <button
-                    type="button"
-                    className="inline-retry"
-                    onClick={() => {
-                      const lastUser = [...messages]
-                        .slice(0, messages.indexOf(m))
-                        .reverse()
-                        .find((x) => x.role === 'user');
-                      if (lastUser) void onInlineRetry(lastUser.content);
-                    }}
-                  >
-                    Retry
-                  </button>
+          {messages.map((m) => {
+            const blocks = blocksForMessage(m);
+            const showStopped = m.stopped && m.role === 'assistant';
+            return (
+              <div
+                key={m.msgId ?? `${m.ts}-${m.role}`}
+                className={`bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-assistant'}`}
+                data-role={m.role}
+              >
+                <div className="bubble-content">
+                  {blocks.map((b, i) => (
+                    <MessageBlock key={i} block={b} />
+                  ))}
+                  {showStopped && <span className="bubble-stopped"> (stopped)</span>}
                 </div>
-              )}
-            </div>
-          ))}
+                {m.interrupted && m.role === 'assistant' && (
+                  <div className="bubble-footer">
+                    <span>Stream interrupted — </span>
+                    <button
+                      type="button"
+                      className="inline-retry"
+                      onClick={() => {
+                        const lastUser = [...messages]
+                          .slice(0, messages.indexOf(m))
+                          .reverse()
+                          .find((x) => x.role === 'user');
+                        if (lastUser) void onInlineRetry(lastUser.content);
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
-          {Object.entries(pendingAssistantContent).map(([msgId, content]) => (
-            <MessageBubble
-              key={`streaming-${msgId}`}
-              message={{
-                ts: Date.now(),
-                role: 'assistant',
-                content,
-                msgId,
-              }}
-            />
-          ))}
+          {/* Streaming assistant — combine live text content with any tool
+              blocks that have arrived mid-stream. On message:done this is
+              replaced by a persisted ChatMessage in `messages`. */}
+          {Object.entries(pendingAssistantContent).map(([msgId, content]) => {
+            const liveBlocks = pendingBlocks[msgId] ?? [];
+            return (
+              <div
+                key={`streaming-${msgId}`}
+                className="bubble bubble-assistant"
+                data-role="assistant"
+              >
+                <div className="bubble-content">
+                  {liveBlocks.map((b, i) => (
+                    <MessageBlock key={`b-${i}`} block={b} />
+                  ))}
+                  {content.length > 0 && <div className="block-text">{content}</div>}
+                </div>
+              </div>
+            );
+          })}
 
           {streaming && activeMsgId && !pendingAssistantContent[activeMsgId] && (
-            <MessageBubble
+            <div
               key={`pending-${activeMsgId}`}
-              message={{ ts: Date.now(), role: 'assistant', content: '', msgId: activeMsgId }}
-            />
+              className="bubble bubble-assistant"
+              data-role="assistant"
+            >
+              <div className="bubble-content">
+                <span className="bubble-loading">…</span>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -140,3 +174,6 @@ export function Chat({ initialMessages }: ChatProps) {
     </div>
   );
 }
+
+// Re-export MessageBubble for back-compat (Phase 1 still references it).
+export { MessageBubble };
