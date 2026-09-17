@@ -49,10 +49,10 @@
   4. Bot can run a ripgrep code search (regex + globs) and see matching lines with context
   5. A bot whose allowlist excludes a tool cannot invoke that tool — the daemon refuses before any side effect
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 - [x] 02-01-PLAN.md
-- [ ] 02-02-PLAN.md
+- [x] 02-02-PLAN.md
 - [ ] 02-03-PLAN.md
 - [ ] `02-01-PLAN.md` — Tracer slice: end-to-end `read_file` (daemon allowlist + safe_path + read_file + 4 stub siblings; main agentic loop + IPC events; renderer MessageBlock discriminated union; safe_path/read_file/allowlist unit tests; Playwright daemon-tools smoke).
 - [ ] `02-02-PLAN.md` — Multi-tool surface: write_file + edit_file (atomic, single-match strict) + list_dir; agentic loop multi-turn resume (bounded at maxTurns=10); 4 new Vitest suites; daemon-tools smoke extended.
@@ -181,7 +181,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton + Streaming Chat | 2/2 | Complete | 2026-09-17 |
-| 2. File Tools + Search + Tool System | 1/3 | In Progress|  |
+| 2. File Tools + Search + Tool System | 2/3 | In Progress|  |
 | 3. Memory + Conversation History | 0/0 | Not started | - |
 | 4. Multi-Bot CRUD + Sidebar | 0/0 | Not started | - |
 | 5. Shell Exec with Approval | 0/0 | Not started | - |
