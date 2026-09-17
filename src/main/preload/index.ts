@@ -12,12 +12,16 @@ import type {
   KeyProbeResult,
   KeySetResult,
   TokenEvent,
+  ToolResultEvent,
+  ToolUseEvent,
 } from '../../shared/types';
 
 const EVENT_CHANNELS = new Set<string>([
   CHANNELS.EVENT_MESSAGE_TOKEN,
   CHANNELS.EVENT_MESSAGE_DONE,
   CHANNELS.EVENT_MESSAGE_ERROR,
+  CHANNELS.EVENT_MESSAGE_TOOL_USE,
+  CHANNELS.EVENT_MESSAGE_TOOL_RESULT,
   CHANNELS.EVENT_DAEMON_STATUS,
   CHANNELS.EVENT_APP_INIT,
 ]);
@@ -63,9 +67,20 @@ declare global {
           | typeof CHANNELS.EVENT_MESSAGE_TOKEN
           | typeof CHANNELS.EVENT_MESSAGE_DONE
           | typeof CHANNELS.EVENT_MESSAGE_ERROR
+          | typeof CHANNELS.EVENT_MESSAGE_TOOL_USE
+          | typeof CHANNELS.EVENT_MESSAGE_TOOL_RESULT
           | typeof CHANNELS.EVENT_DAEMON_STATUS
           | typeof CHANNELS.EVENT_APP_INIT,
-        handler: (payload: TokenEvent | DoneEvent | ErrorEvent | DaemonStatus | AppInitPayload) => void,
+        handler: (
+          payload:
+            | TokenEvent
+            | DoneEvent
+            | ErrorEvent
+            | ToolUseEvent
+            | ToolResultEvent
+            | DaemonStatus
+            | AppInitPayload,
+        ) => void,
       ) => () => void;
     };
   }

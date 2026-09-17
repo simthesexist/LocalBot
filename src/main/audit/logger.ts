@@ -11,6 +11,8 @@ export interface AuditInput {
   outcome: 'ok' | 'error';
   durationMs: number;
   error?: { code: string; message: string };
+  /** Optional Anthropic tool_use id; present on Phase 2+ audit lines. */
+  tool_use_id?: string;
 }
 
 function utcDateString(): string {

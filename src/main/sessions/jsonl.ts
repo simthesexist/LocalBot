@@ -1,15 +1,19 @@
 // Append/read for the global session JSONL file (global.jsonl under <userData>/sessions/).
+//
+// Phase 2: appendMessage accepts optional `blocks?: MessageBlock[]` and writes
+// them into the JSONL row. Legacy loaders fall back to the `content` field.
 
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { sessionFilePath } from '../paths';
-import type { ChatMessage } from '../../shared/types';
+import type { ChatMessage, MessageBlock } from '../../shared/types';
 
 const SESSION_FILENAME = 'global.jsonl';
 
 export interface AppendInput {
   role: 'user' | 'assistant';
   content: string;
+  blocks?: MessageBlock[];
   stopped?: boolean;
   interrupted?: boolean;
   msgId?: string;
@@ -20,6 +24,7 @@ export async function appendMessage(input: AppendInput): Promise<void> {
     ts: Date.now(),
     role: input.role,
     content: input.content,
+    blocks: input.blocks,
     stopped: input.stopped,
     interrupted: input.interrupted,
     msgId: input.msgId,
@@ -36,7 +41,10 @@ export async function loadSession(): Promise<ChatMessage[]> {
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      out.push(JSON.parse(trimmed) as ChatMessage);
+      const parsed = JSON.parse(trimmed) as ChatMessage;
+      // Phase 2: preserve optional blocks array as-is. No shape migration
+      // needed for legacy rows that only carry `content`.
+      out.push(parsed);
     } catch {
       // skip malformed
     }

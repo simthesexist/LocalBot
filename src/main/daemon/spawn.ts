@@ -51,12 +51,28 @@ async function sendRequest(req: JsonRpcRequest): Promise<JsonRpcResponse> {
   });
 }
 
-export async function callTool(name: string, params: Record<string, unknown>): Promise<JsonRpcResponse> {
+/**
+ * Phase 2: callTool accepts a {toolCallId, bot} envelope so the daemon can
+ * stamp the audit line with the right bot id and emit the JSON-RPC
+ * `params.bot` for policy lookup. `bot` defaults to 'default' when the
+ * caller omits it (Phase 2 has only one bot).
+ */
+export interface CallToolOptions {
+  toolCallId?: string;
+  bot?: string;
+}
+
+export async function callTool(
+  name: string,
+  params: Record<string, unknown>,
+  opts: CallToolOptions = {},
+): Promise<JsonRpcResponse> {
   if (!initialized) {
     throw new Error('daemon not initialized');
   }
   const id = nextId++;
-  const toolCallId = `tc_${id}_${Date.now()}`;
+  const toolCallId = opts.toolCallId ?? `tc_${id}_${Date.now()}`;
+  const bot = opts.bot ?? 'default';
   activeToolCallId = toolCallId;
   const startedAt = Date.now();
   try {
@@ -64,27 +80,29 @@ export async function callTool(name: string, params: Record<string, unknown>): P
       jsonrpc: '2.0',
       id,
       method: 'tools/call',
-      params: { name, arguments: params, toolCallId },
+      params: { name, arguments: params, toolCallId, bot },
     });
     const durationMs = Date.now() - startedAt;
     const err = (resp as any)?.error;
     await appendAuditLine({
-      bot: 'main',
+      bot,
       tool: name,
       params,
       outcome: err ? 'error' : 'ok',
       durationMs,
+      tool_use_id: toolCallId,
       error: err ? { code: String(err.code ?? 'unknown'), message: String(err.message ?? '') } : undefined,
     });
     return resp;
   } catch (err) {
     const durationMs = Date.now() - startedAt;
     await appendAuditLine({
-      bot: 'main',
+      bot,
       tool: name,
       params,
       outcome: 'error',
       durationMs,
+      tool_use_id: toolCallId,
       error: { code: 'daemon_unreachable', message: (err as Error).message },
     });
     throw err;
@@ -225,13 +243,24 @@ export async function spawnDaemon(): Promise<void> {
     return;
   }
 
-  // Send initialize.
+  // Send initialize. Phase 2: include workspaceRoot so the daemon's
+  // safe_path can resolve paths against the bot workspace. Lazy-create the
+  // workspace dir so the daemon's first tools/call finds it ready.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { ensureWorkspace } = require('../paths');
+  const workspaceRoot = await ensureWorkspace();
   const initId = nextId++;
   const initReq: JsonRpcRequest = {
     jsonrpc: '2.0',
     id: initId,
     method: 'initialize',
-    params: { client: 'localbot-main', version: '0.1.0', userDataDir: app.getPath('userData') },
+    params: {
+      client: 'localbot-main',
+      version: '0.2.0',
+      userDataDir: app.getPath('userData'),
+      bot: 'default',
+      workspaceRoot,
+    },
   };
   try {
     const resp = await sendRequest(initReq);
