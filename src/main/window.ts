@@ -1,13 +1,37 @@
 // BrowserWindow factory.
 
 import { BrowserWindow, app } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditLine } from './audit/logger';
 import { CHANNELS } from '../shared/ipc-channels';
 import { hasStoredKey } from './ipc/key';
 import { loadSession } from './sessions/jsonl';
 
-const isDev = !app.isPackaged;
+export type RendererTarget =
+  | { kind: 'built'; path: string }
+  | { kind: 'dev'; url: string };
+
+/**
+ * Resolve which renderer entry point to load.
+ *
+ * Branch on whether a built renderer file exists on disk — not on the packaged
+ * flag from electron's app module, which is unreliable when both `electron .`
+ * (dev) and `electron dist/main/index.js` (npm start) run unpackaged on a
+ * single-machine Windows workflow.
+ *
+ * - built branch → `win.loadFile(target.path)`
+ * - dev   branch → `win.loadURL(target.url)`  (default: http://localhost:5173)
+ */
+export function resolveRendererUrl(opts: {
+  builtIndexPath: string;
+  devUrl?: string;
+}): RendererTarget {
+  if (fs.existsSync(opts.builtIndexPath)) {
+    return { kind: 'built', path: opts.builtIndexPath };
+  }
+  return { kind: 'dev', url: opts.devUrl ?? 'http://localhost:5173' };
+}
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -60,11 +84,12 @@ export function createMainWindow(): BrowserWindow {
     });
   });
 
-  if (isDev) {
-    void win.loadURL('http://localhost:5173');
+  const builtIndexPath = path.join(__dirname, '..', '..', 'renderer', 'index.html');
+  const target = resolveRendererUrl({ builtIndexPath });
+  if (target.kind === 'dev') {
+    void win.loadURL(target.url);
   } else {
-    const indexPath = path.join(__dirname, '..', '..', 'renderer', 'index.html');
-    void win.loadFile(indexPath);
+    void win.loadFile(target.path);
   }
 
   return win;
