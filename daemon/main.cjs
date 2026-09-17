@@ -14,6 +14,43 @@ const SERVER_INFO = { server: 'localbot-daemon', version: '0.2.0', tools: [] };
 let nextId = 1;
 const pendingReady = { resolve: null, reject: null };
 
+// Per-call AbortController registry so `tools/cancel` can abort in-flight
+// tool work (Pitfall 3 — cancel propagation). Keyed by params.toolCallId.
+const abortControllers = new Map();
+
+function ensureAbortController(toolCallId) {
+  if (!toolCallId) {
+    // No toolCallId → no-op controller; tools that ignore `signal` still work.
+    return new AbortController();
+  }
+  let ctrl = abortControllers.get(toolCallId);
+  if (!ctrl) {
+    ctrl = new AbortController();
+    abortControllers.set(toolCallId, ctrl);
+  }
+  return ctrl;
+}
+
+function dropAbortController(toolCallId) {
+  if (!toolCallId) return;
+  abortControllers.delete(toolCallId);
+}
+
+// Code-search audit shape (Pitfall 5): strip the matches payload so the
+// JSONL line stays well under 1 MiB even for huge result sets. We only
+// record the params + result_count (extracted from the success result, or
+// 0 if the call failed).
+function codeSearchAuditParams(args, successResult) {
+  const { pattern, glob, path, max_results } = args || {};
+  let resultCount;
+  if (successResult && Array.isArray(successResult.matches)) {
+    resultCount = successResult.matches.length;
+  }
+  const audit = { pattern, glob, path, max_results };
+  if (typeof resultCount === 'number') audit.result_count = resultCount;
+  return audit;
+}
+
 function reply(obj) {
   writeMessage(process.stdout, obj);
 }
@@ -77,12 +114,20 @@ rl.on('line', async (line) => {
         const startedAt = Date.now();
         let outcome = 'ok';
         let errPayload = undefined;
+        let successResult = undefined;
         try {
+          // Phase 2 Wave 3: build a per-call AbortController so `tools/cancel`
+          // (which kills the registered child) and `client.ts` cancel can both
+          // abort in-flight tool work. The no-op signal preserves Phase 1
+          // behavior for tools that don't care about cancellation.
+          const abortController = ensureAbortController(toolCallId);
           const result = await registry.callTool(bot, name, args, {
             workspaceRoot,
             toolCallId,
             bot,
+            signal: abortController.signal,
           });
+          successResult = result;
           replyResult(id, result);
         } catch (err) {
           outcome = 'error';
@@ -96,22 +141,40 @@ rl.on('line', async (line) => {
             // existing Phase 1 Playwright smoke asserts `code: 'unknown_tool'`).
           replyError(id, errPayload.code, errPayload.message);
         } finally {
+          // Code-search audit minimization (Pitfall 5): the matches payload
+          // would blow the 1 MiB JSONL cap, so record only the params +
+          // result_count for the code_search audit line.
+          const auditParams = (name === 'code_search')
+            ? codeSearchAuditParams(args, successResult)
+            : args;
           const durationMs = Date.now() - startedAt;
           audit.appendAudit({
             tool: name,
             bot,
-            params: args,
+            params: auditParams,
             outcome,
             durationMs,
             error: errPayload,
             tool_use_id: toolCallId,
           });
+          dropAbortController(toolCallId);
         }
         break;
       }
 
       case 'tools/cancel': {
         const toolCallId = (params && typeof params.toolCallId === 'string') ? params.toolCallId : '';
+        if (!toolCallId) {
+          replyError(id, -32602, 'missing toolCallId');
+          break;
+        }
+        // Abort the per-call AbortController first so the tool's async loop
+        // unwinds; then forward to the registry which kills any registered
+        // child (e.g. ripgrep for code_search).
+        const ctrl = abortControllers.get(toolCallId);
+        if (ctrl) {
+          try { ctrl.abort(); } catch { /* ignore */ }
+        }
         replyResult(id, registry.cancelToolCall(toolCallId));
         break;
       }

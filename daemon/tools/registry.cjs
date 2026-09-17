@@ -1,8 +1,8 @@
 // Tool registry. Phase 2 Wave 1:
 //   - allowlist + denylist enforced BEFORE any fs call (SEC-02)
 //   - tool schemas returned from tools/list so main forwards them to M3
-//   - cancelToolCall is a stub (returns {cancelled:false}) — Wave 3 stores
-//     active tool children and kills ripgrep on cancel.
+//   - cancelToolCall tracks in-flight tool children and kills ripgrep on
+//     cancel (Wave 3).
 
 const { DEFAULT_POLICY } = require('../bots/default.cjs');
 
@@ -97,6 +97,49 @@ function loadTool(name) {
   return mod;
 }
 
+// Wave 3: in-flight tool child tracking so `tools/cancel` can kill long-
+// running subprocesses (currently only `code_search`/`rg`). toolCallId is the
+// JSON-RPC `params.toolCallId` from the `tools/call` request.
+const activeChildren = new Map();
+
+function registerChild(toolCallId, child) {
+  if (!toolCallId || !child) return;
+  activeChildren.set(toolCallId, child);
+  // Auto-clean when the child exits so the map doesn't grow unbounded.
+  child.once('exit', () => {
+    if (activeChildren.get(toolCallId) === child) {
+      activeChildren.delete(toolCallId);
+    }
+  });
+}
+
+function unregisterChild(toolCallId) {
+  if (!toolCallId) return;
+  activeChildren.delete(toolCallId);
+}
+
+function cancelToolCall(toolCallId) {
+  if (!toolCallId) return { cancelled: false, reason: 'not_found' };
+  const child = activeChildren.get(toolCallId);
+  if (!child) return { cancelled: false, reason: 'not_found' };
+  try {
+    child.kill('SIGTERM');
+  } catch {
+    /* ignore — process may have just exited */
+  }
+  // Hard fallback: SIGKILL after 2s if the child didn't honor SIGTERM.
+  setTimeout(() => {
+    if (activeChildren.get(toolCallId) === child) {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* ignore */
+      }
+    }
+  }, 2000);
+  return { cancelled: true };
+}
+
 async function callTool(botId, name, args, ctx) {
   // Line 1: denylist check (highest priority — overrides allowlist).
   const policy = getPolicy(botId);
@@ -121,22 +164,27 @@ async function callTool(botId, name, args, ctx) {
     e.reason = 'allowlist';
     throw e;
   }
-  // Line 4: dispatch.
+  // Line 4: dispatch. We thread `registry` + `registerChild` / `unregisterChild`
+  // so tools that spawn long-lived children (code_search → rg) can register
+  // themselves for cancellation by toolCallId.
   const mod = loadTool(name);
-  return await mod.call(args, ctx);
-}
-
-function cancelToolCall(_toolCallId) {
-  // Phase 2 Wave 1: no in-flight tool tracking yet — registry returns
-  // {cancelled:false}. Wave 3 will store active tool children and kill
-  // ripgrep processes on cancel.
-  return { cancelled: false };
+  return await mod.call(args, {
+    ...ctx,
+    registry: {
+      registerChild,
+      unregisterChild,
+      activeChildren, // exposed so future tools / tests can introspect
+    },
+  });
 }
 
 module.exports = {
   listTools,
   callTool,
   cancelToolCall,
+  registerChild,
+  unregisterChild,
+  activeChildren, // exposed for tests
   TOOLS,
   SCHEMAS,
   // Exported for unit tests.

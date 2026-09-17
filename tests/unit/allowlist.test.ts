@@ -100,8 +100,8 @@ describe('registry.callTool — allowlist enforcement', () => {
 });
 
 describe('registry.cancelToolCall', () => {
-  it('returns { cancelled: false } in Wave 1 (no in-flight tracking yet)', () => {
+  it('returns { cancelled: false, reason: "not_found" } when no child is registered', () => {
     const r = registry.cancelToolCall('tc_test_1');
-    expect(r).toEqual({ cancelled: false });
+    expect(r).toEqual({ cancelled: false, reason: 'not_found' });
   });
 });
