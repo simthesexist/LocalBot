@@ -1,0 +1,58 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Skeleton + Streaming Chat",
+      "status": "pending"
+    },
+    {
+      "number": "2",
+      "name": "File Tools + Search + Tool System",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Memory + Conversation History",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Multi-Bot CRUD + Sidebar",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Shell Exec with Approval",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "Scheduler + Notifications",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Obsidian Integration",
+      "status": "pending"
+    },
+    {
+      "number": "8",
+      "name": "Browser Automation",
+      "status": "pending"
+    },
+    {
+      "number": "9",
+      "name": "Phone Reach + Ship",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
+  },
+  "updated_at": "2026-09-17T20:44:18.297Z"
+}
