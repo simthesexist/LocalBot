@@ -84,7 +84,7 @@ export function createMainWindow(): BrowserWindow {
     });
   });
 
-  const builtIndexPath = path.join(__dirname, '..', '..', 'renderer', 'index.html');
+  const builtIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
   const target = resolveRendererUrl({ builtIndexPath });
   if (target.kind === 'dev') {
     void win.loadURL(target.url);
