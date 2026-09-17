@@ -8,3 +8,7 @@ release/
 Thumbs.db
 .env
 .env.local
+test-results/
+playwright-report/
+playwright/.cache/
+coverage/
