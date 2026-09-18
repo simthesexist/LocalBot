@@ -3,7 +3,7 @@
 ## Phases
 
 - [x] **Phase 1: Skeleton + Streaming Chat** - Electron + React shell, M3 API streaming chat, keychain + tool daemon foundation
-- [ ] **Phase 2: File Tools + Search + Tool System** - read/write/edit/list/code_search via per-bot allowlisted tool daemon with inline UI blocks
+- [x] **Phase 2: File Tools + Search + Tool System** - read/write/edit/list/code_search via per-bot allowlisted tool daemon with inline UI blocks
 - [ ] **Phase 3: Memory + Conversation History** - Persistent markdown+JSON memory, JSONL history, token-budget summarization, workspace file tree
 - [ ] **Phase 4: Multi-Bot CRUD + Sidebar** - Create/list/edit/delete/run/cancel bots with sidebar, modals, settings, run history
 - [ ] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
