@@ -1,7 +1,10 @@
-// Single bot row in the BotSidebar. Phase 4 Wave 1.
+// Single bot row in the BotSidebar. Phase 4 Wave 1+2.
 //
-// Renders: status dot + name + last-run text + delete button. The
+// Wave 1: status dot + name + last-run text + delete button. The
 // settings button is wired to a no-op (Wave 3 owns the settings page).
+// Wave 2: adds play / stop actions based on bot.status; the play icon
+// focuses the SidebarComposer at the bottom of the sidebar; the stop
+// icon calls cancelBotRun via the parent.
 
 import type { BotConfig } from '../../shared/types';
 
@@ -11,6 +14,8 @@ export interface SidebarBotRowProps {
   onSelect: () => void;
   onDelete: () => void;
   onSettings?: () => void;
+  onPlay?: () => void;
+  onStop?: () => void;
 }
 
 function formatRelative(iso: string | undefined): string {
@@ -33,8 +38,11 @@ export function SidebarBotRow({
   onSelect,
   onDelete,
   onSettings,
+  onPlay,
+  onStop,
 }: SidebarBotRowProps) {
   const lastRunText = bot.lastRunAt ? formatRelative(bot.lastRunAt) : 'never';
+  const isRunning = bot.status === 'running';
   return (
     <li
       className="bot-row"
@@ -60,9 +68,36 @@ export function SidebarBotRow({
       <span className="bot-row-name">{bot.name}</span>
       <span className="bot-row-lastrun">({lastRunText})</span>
       <span className="bot-row-actions">
+        {isRunning ? (
+          <button
+            type="button"
+            className="bot-row-action bot-row-stop"
+            aria-label={`Stop ${bot.name}`}
+            data-testid={`bot-stop-${bot.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStop?.();
+            }}
+          >
+            ■
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="bot-row-action bot-row-play"
+            aria-label={`Run ${bot.name}`}
+            data-testid={`bot-play-${bot.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay?.();
+            }}
+          >
+            ▶
+          </button>
+        )}
         <button
           type="button"
-          className="bot-row-settings"
+          className="bot-row-action bot-row-settings"
           aria-label={`Settings for ${bot.name}`}
           data-testid={`bot-settings-${bot.id}`}
           onClick={(e) => {
@@ -74,7 +109,7 @@ export function SidebarBotRow({
         </button>
         <button
           type="button"
-          className="bot-row-delete"
+          className="bot-row-action bot-row-delete"
           aria-label={`Delete ${bot.name}`}
           data-testid={`bot-delete-${bot.id}`}
           onClick={(e) => {

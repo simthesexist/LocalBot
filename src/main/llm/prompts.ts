@@ -19,3 +19,7 @@ export const DEFAULT_SYSTEM_PROMPT_BASE =
  * removed once chat.ts is migrated.
  */
 export const DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT_BASE;
+
+// Phase 4 Wave 2: re-export injectPersonaSuffix so callers can import the
+// full prompt-composition surface from a single module.
+export { injectPersonaSuffix } from '../bots/policy';

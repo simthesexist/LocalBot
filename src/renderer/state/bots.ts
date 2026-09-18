@@ -61,14 +61,29 @@ function ensureDaemonSubscription(): void {
   if (subscribedToDaemon) return;
   subscribedToDaemon = true;
   if (!window.localbot) return;
-  const off = window.localbot.on('bot:list:updated', () => {
+  const offList = window.localbot.on('bot:list:updated', () => {
     void refresh();
+  });
+  // Phase 4 Wave 2: subscribe to EVENT_BOT_STATUS so the sidebar reflects
+  // running/errored state live without polling. Updates the matching
+  // bot's status field in-place (no full array replacement) to avoid
+  // unnecessary re-renders on every token turn.
+  const offStatus = window.localbot.on('bot:status', (payload) => {
+    const p = payload as { bot?: string; status?: 'idle' | 'running' | 'errored' | 'scheduled' };
+    if (!p || typeof p.bot !== 'string' || typeof p.status !== 'string') return;
+    const idx = state.bots.findIndex((b) => b.id === p.bot);
+    if (idx === -1) return;
+    const updated = { ...state.bots[idx], status: p.status };
+    const next = state.bots.slice();
+    next[idx] = updated;
+    state.setBots(next);
   });
   // Best-effort cleanup on window unload — most React apps do not need
   // this but keeps the listener count accurate during HMR reloads.
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
-      try { off(); } catch { /* ignore */ }
+      try { offList(); } catch { /* ignore */ }
+      try { offStatus(); } catch { /* ignore */ }
     }, { once: true });
   }
 }
@@ -170,6 +185,43 @@ export function useActiveBotId(): {
   useEffect(() => subscribe(() => setSnapshot(getSnapshot())), []);
   const setActiveBotId = useCallback((id: string) => state.setActiveBotId(id), []);
   return { activeBotId: snapshot.activeBotId, setActiveBotId };
+}
+
+/**
+ * Phase 4 Wave 2: action methods exposed by the bot store. The renderer
+ * never calls window.localbot.bot.* directly — it goes through these
+ * helpers so the store can update in response to the daemon's
+ * EVENT_BOT_LIST_UPDATED / EVENT_BOT_STATUS broadcasts.
+ */
+
+export async function triggerBot(bot: string, content: string): Promise<{ ok: boolean; runId?: string; error?: string }> {
+  if (!window.localbot) return { ok: false, error: 'localbot not available' };
+  const res = (await window.localbot.bot.trigger({ bot, content })) as {
+    ok: boolean; runId?: string; error?: string;
+  };
+  return { ok: !!res?.ok, runId: res?.runId, error: res?.error };
+}
+
+export async function cancelBotRun(runId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!window.localbot) return { ok: false, error: 'localbot not available' };
+  const res = (await window.localbot.bot.cancel({ runId })) as { ok: boolean; error?: string };
+  return { ok: !!res?.ok, error: res?.error };
+}
+
+export async function updateBot(bot: string, patch: Record<string, unknown>): Promise<{ ok: boolean; bot?: BotConfig; error?: string }> {
+  if (!window.localbot) return { ok: false, error: 'localbot not available' };
+  const res = (await window.localbot.bot.update({ bot, patch })) as {
+    ok: boolean; bot?: BotConfig; error?: string;
+  };
+  if (res?.ok && res.bot) {
+    const idx = state.bots.findIndex((b) => b.id === res.bot!.id);
+    if (idx !== -1) {
+      const next = state.bots.slice();
+      next[idx] = res.bot;
+      state.setBots(next);
+    }
+  }
+  return { ok: !!res?.ok, bot: res?.bot, error: res?.error };
 }
 
 // Test hooks — not part of the public API but exported for unit tests.

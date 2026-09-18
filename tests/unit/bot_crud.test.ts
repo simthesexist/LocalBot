@@ -17,6 +17,7 @@ const require_ = createRequire(import.meta.url);
 const loader = require_('../../daemon/bots/loader.cjs') as {
   readConfig: (userDataDir: string, bot: string) => Record<string, unknown> | null;
   writeConfig: (userDataDir: string, bot: string, cfg: Record<string, unknown>) => Record<string, unknown>;
+  writeConfigPatch: (userDataDir: string, bot: string, patch: Record<string, unknown>) => Record<string, unknown>;
   listAllBots: (userDataDir: string) => Array<Record<string, unknown>>;
   deleteBot: (userDataDir: string, bot: string) => void;
   botExists: (userDataDir: string, bot: string) => boolean;
@@ -173,6 +174,94 @@ describe('bots/create integration with audit minimization', () => {
       // a separate envelope concern covered by the Playwright suite.
       expect(cfg?.persona).toBe('secret persona content');
       expect(cfg?.workspace).toBe('C:\\secret\\workspace');
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+});
+
+describe('bots/update — writeConfigPatch', () => {
+  it('patches config.json atomically', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'patch-bot', {
+        id: 'patch-bot',
+        name: 'Original',
+        persona: 'old persona',
+        schemaVersion: 1,
+        allowlist: ['read_file'],
+      });
+      const patched = loader.writeConfigPatch(dir, 'patch-bot', { name: 'New name' });
+      expect(patched.name).toBe('New name');
+      // Re-read to confirm the on-disk file changed.
+      const reread = loader.readConfig(dir, 'patch-bot');
+      expect(reread?.name).toBe('New name');
+      expect(reread?.persona).toBe('old persona');
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('rejects id change with code:invalid_id_change', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'id-bot', { id: 'id-bot', name: 'Id', schemaVersion: 1 });
+      expect(() => loader.writeConfigPatch(dir, 'id-bot', { id: 'different' })).toThrowError(
+        expect.objectContaining({ code: 'invalid_id_change' }),
+      );
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('rejects createdAt change with code:created_at_immutable', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'ca-bot', { id: 'ca-bot', name: 'CA', schemaVersion: 1 });
+      expect(() => loader.writeConfigPatch(dir, 'ca-bot', { createdAt: '1999-01-01T00:00:00Z' })).toThrowError(
+        expect.objectContaining({ code: 'created_at_immutable' }),
+      );
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('rejects unknown patch keys with code:invalid_config', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'uk-bot', { id: 'uk-bot', name: 'UK', schemaVersion: 1 });
+      expect(() => loader.writeConfigPatch(dir, 'uk-bot', { secretKey: 'x' } as unknown as Record<string, unknown>)).toThrowError(
+        expect.objectContaining({ code: 'invalid_config' }),
+      );
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('preserves lastRunAt on unrelated patches (Pitfall 6 ordering)', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'lr-bot', { id: 'lr-bot', name: 'LR', schemaVersion: 1 });
+      // Seed lastRunAt via direct read+write (loader.writeConfig accepts lastRunAt?).
+      const cfg = loader.readConfig(dir, 'lr-bot') as Record<string, unknown>;
+      cfg.lastRunAt = '2026-01-01T00:00:00.000Z';
+      loader.writeConfig(dir, 'lr-bot', cfg);
+      // Now patch unrelated field.
+      loader.writeConfigPatch(dir, 'lr-bot', { name: 'Renamed' });
+      const after = loader.readConfig(dir, 'lr-bot');
+      expect(after?.lastRunAt).toBe('2026-01-01T00:00:00.000Z');
+      expect(after?.name).toBe('Renamed');
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('throws unknown_bot when patching a non-existent bot', () => {
+    const dir = mkTmp();
+    try {
+      expect(() => loader.writeConfigPatch(dir, 'nope', { name: 'X' })).toThrowError(
+        expect.objectContaining({ code: 'unknown_bot' }),
+      );
     } finally {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
     }

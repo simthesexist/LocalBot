@@ -1,39 +1,34 @@
-// BotSidebar — Phase 4 Wave 1 left rail.
+// BotSidebar — Phase 4 Wave 1+2 left rail.
 //
 // Replaces Phase 3's `WorkspaceTree` left rail (260 px). Renders one
 // `SidebarBotRow` per bot with a status dot, name, last-run text, and
-// delete button. The `+` button opens `NewBotModal`; clicking a row's
-// delete icon opens `DeleteConfirmModal` for that bot. The renderer's
-// `useBots()` hook subscribes to `EVENT_BOT_LIST_UPDATED` so the
-// sidebar refreshes transparently after any mutation.
+// delete button. Wave 2 adds:
+//   - `SidebarComposer` mounted at the bottom (Enter submits; disabled
+//     while the active bot's status === 'running').
+//   - `SettingsEditModal` opened from each row's settings icon
+//     (AGENT-04 settings edit surface — full settings page is Wave 3).
+//   - Play/stop actions in `SidebarBotRow` that call triggerBot / cancelBotRun.
 
 import { useEffect, useState } from 'react';
-import { useBots, useActiveBotId, seedBots } from '../state/bots';
+import { useBots, useActiveBotId, seedBots, triggerBot } from '../state/bots';
 import type { BotConfig } from '../../shared/types';
 import { SidebarBotRow } from './SidebarBotRow';
 import { NewBotModal } from './NewBotModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { SettingsEditModal } from './SettingsEditModal';
+import { SidebarComposer } from './SidebarComposer';
 
 export interface BotSidebarProps {
-  /**
-   * Bot list shipped via `app:init.bots`. Used to synchronously hydrate
-   * the sidebar on first paint. The sidebar's own `useBots().refresh()`
-   * keeps it live afterwards.
-   */
   initialBots?: BotConfig[];
 }
 
 export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
   const { bots, loading, error, activeBotId, setActiveBotId, refresh } = useBots();
-  // useActiveBotId shares the same module-scope store as useBots; we
-  // call it explicitly here so a future refactor that splits them
-  // doesn't break the row-click handler.
   const { setActiveBotId: setActive } = useActiveBotId();
   const [showNewBotModal, setShowNewBotModal] = useState(false);
   const [confirmDeleteBot, setConfirmDeleteBot] = useState<BotConfig | null>(null);
+  const [settingsBot, setSettingsBot] = useState<BotConfig | null>(null);
 
-  // Synchronous first-paint hydration from app:init, then a refresh so
-  // the sidebar reflects the latest daemon state.
   useEffect(() => {
     if (initialBots && initialBots.length > 0) {
       seedBots(initialBots);
@@ -45,6 +40,9 @@ export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
     setActive(id);
     setActiveBotId(id);
   };
+
+  const activeBot = bots.find((b) => b.id === activeBotId) ?? null;
+  const composerDisabled = activeBot?.status === 'running';
 
   return (
     <aside
@@ -84,26 +82,24 @@ export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
             isActive={bot.id === activeBotId}
             onSelect={() => onSelect(bot.id)}
             onDelete={() => setConfirmDeleteBot(bot)}
-            onSettings={() => {
-              // Wave 3 owns the settings page; for now this is a no-op.
-              // T-P4-08: do not silently fail — the click target exists
-              // so the user can discover the affordance.
-              /* eslint-disable-next-line no-console */
-              console.info('[bot-row] settings not implemented yet', bot.id);
-            }}
+            onSettings={() => setSettingsBot(bot)}
           />
         ))}
       </ul>
+
+      <SidebarComposer
+        activeBotId={activeBotId}
+        disabled={composerDisabled}
+        onSend={async (content) => {
+          await triggerBot(activeBotId, content);
+        }}
+      />
 
       {showNewBotModal && (
         <NewBotModal
           onClose={() => setShowNewBotModal(false)}
           onCreated={(bot) => {
             setActive(bot.id);
-            // EVENT_BOT_LIST_UPDATED already triggers useBots().refresh();
-            // the explicit refresh below is belt-and-suspenders for the
-            // rare case where the daemon broadcast arrives before our
-            // subscription is wired.
             void refresh();
           }}
         />
@@ -113,10 +109,16 @@ export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
           bot={confirmDeleteBot}
           onClose={() => setConfirmDeleteBot(null)}
           onDeleted={() => {
-            // If the user deleted their active bot, fall back to the
-            // implicit 'default' so the chat view never has a dangling
-            // selected row.
             if (activeBotId === confirmDeleteBot.id) setActive('default');
+            void refresh();
+          }}
+        />
+      )}
+      {settingsBot && (
+        <SettingsEditModal
+          bot={settingsBot}
+          onClose={() => setSettingsBot(null)}
+          onUpdated={() => {
             void refresh();
           }}
         />

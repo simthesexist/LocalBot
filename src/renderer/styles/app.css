@@ -1217,3 +1217,83 @@ html, body, #root {
 .destructive:hover:not(:disabled) {
   background: #dc2626;
 }
+
+/* ─── Phase 4 Wave 2: SidebarComposer + SettingsEditModal + row actions. ─── */
+
+.sidebar-composer {
+  padding: 8px;
+  border-top: 1px solid var(--color-border, #444);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-composer-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border, #444);
+  border-radius: 4px;
+  resize: vertical;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 13px;
+  background: var(--color-input-bg, #1e1e1e);
+  color: var(--color-text, #e0e0e0);
+}
+
+.sidebar-composer-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sidebar-composer-send {
+  margin-top: 4px;
+  padding: 4px 10px;
+  background: var(--color-accent, #2563eb);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  align-self: flex-end;
+}
+
+.sidebar-composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bot-row-action {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--color-text-muted, #888);
+  font-size: 13px;
+}
+
+.bot-row-action:hover {
+  color: var(--color-text, #e0e0e0);
+}
+
+.bot-row-play {
+  color: var(--color-accent, #2563eb);
+}
+
+.bot-row-stop {
+  color: var(--color-stop-bg, #ef4444);
+}
+
+.settings-edit-modal label {
+  display: block;
+  margin: 8px 0;
+}
+
+.settings-edit-modal textarea {
+  width: 100%;
+  min-height: 80px;
+}
+
+.settings-edit-modal input[type="text"] {
+  width: 100%;
+}

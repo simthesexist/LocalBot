@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMessages } from '../state/messages';
+import { useActiveBotId } from '../state/bots';
 
 export function Composer() {
   const { streaming, activeMsgId, appendUserMsg, setStreaming, setActiveMsgId } = useMessages();
+  const { activeBotId } = useActiveBotId();
   const [text, setText] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -37,7 +39,7 @@ export function Composer() {
     setStreaming(true);
     setActiveMsgId(msgId, 'user');
     try {
-      await window.localbot.sendMessage(content, msgId);
+      await window.localbot.sendMessage(content, msgId, activeBotId);
     } catch {
       setStreaming(false);
       setActiveMsgId(null);
@@ -65,7 +67,7 @@ export function Composer() {
       <textarea
         ref={taRef}
         className="composer-input"
-        placeholder={streaming ? 'Streaming… press Esc to stop' : 'Send a message…'}
+        placeholder={streaming ? 'Streaming… press Esc to stop' : `Send a message to ${activeBotId}…`}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}

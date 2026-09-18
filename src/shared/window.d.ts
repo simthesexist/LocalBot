@@ -4,6 +4,8 @@
 
 import type {
   AppInitPayload,
+  BotCancelRequest,
+  BotCancelResult,
   BotCreateRequest,
   BotCreateResult,
   BotDeleteRequest,
@@ -11,6 +13,10 @@ import type {
   BotListResult,
   BotListUpdatedEvent,
   BotStatusEvent,
+  BotTriggerRequest,
+  BotTriggerResult,
+  BotUpdateRequest,
+  BotUpdateResult,
   DaemonStatus,
   DoneEvent,
   ErrorEvent,
@@ -50,7 +56,11 @@ export type LocalbotChannel =
   | 'bots:create'
   | 'bots:delete'
   | 'bot:list:updated'
-  | 'bot:status';
+  | 'bot:status'
+  // Phase 4 Wave 2 channels (invoke):
+  | 'bots:update'
+  | 'bots:trigger'
+  | 'bots:cancel';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -68,7 +78,7 @@ export type LocalbotEventPayload =
   | BotStatusEvent;
 
 export interface LocalbotApi {
-  sendMessage: (content: string, msgId: string) => Promise<{ ok: boolean; error?: string }>;
+  sendMessage: (content: string, msgId: string, bot?: string) => Promise<{ ok: boolean; error?: string }>;
   cancel: (msgId: string) => Promise<{ ok: boolean }>;
   key: {
     get: () => Promise<KeyGetResult>;
@@ -95,6 +105,10 @@ export interface LocalbotApi {
     list: () => Promise<BotListResult>;
     create: (req: BotCreateRequest) => Promise<BotCreateResult>;
     delete: (req: BotDeleteRequest) => Promise<BotDeleteResult>;
+    // Phase 4 Wave 2: settings edit, manual trigger, cancel.
+    update: (req: BotUpdateRequest) => Promise<BotUpdateResult>;
+    trigger: (req: BotTriggerRequest) => Promise<BotTriggerResult>;
+    cancel: (req: BotCancelRequest) => Promise<BotCancelResult>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

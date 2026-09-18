@@ -20,6 +20,11 @@ export const CHANNELS = {
   BOTS_CREATE: 'bots:create',
   BOTS_DELETE: 'bots:delete',
 
+  // Phase 4 Wave 2: settings edit, manual trigger, cancel.
+  BOTS_UPDATE: 'bots:update',
+  BOTS_TRIGGER: 'bots:trigger',
+  BOTS_CANCEL: 'bots:cancel',
+
   // Renderer -> main (one-way): ask main to re-send app:init so the renderer
   // can close the race window between `did-finish-load` (main fires the
   // initial send) and React's first `useEffect` (renderer registers the
