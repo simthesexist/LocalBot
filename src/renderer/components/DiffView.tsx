@@ -93,14 +93,28 @@ function DiffHeader({ file, mode, onToggle }: DiffHeaderProps) {
   return (
     <div className="diff-header">
       <span className="diff-header-file">Diff: {file}</span>
-      <button
-        type="button"
-        className="diff-header-toggle"
-        onClick={onToggle}
-        aria-label={`Switch to ${mode === 'split' ? 'unified' : 'split'} view`}
-      >
-        {mode === 'split' ? 'Unified' : 'Split'}
-      </button>
+      <div className="diff-mode-toggle" role="group" aria-label="Diff view mode">
+        <button
+          type="button"
+          className="diff-header-toggle"
+          aria-pressed={mode === 'split'}
+          aria-label="Split view"
+          data-active={mode === 'split'}
+          onClick={() => mode !== 'split' && onToggle()}
+        >
+          Split
+        </button>
+        <button
+          type="button"
+          className="diff-header-toggle"
+          aria-pressed={mode === 'unified'}
+          aria-label="Unified view"
+          data-active={mode === 'unified'}
+          onClick={() => mode !== 'unified' && onToggle()}
+        >
+          Unified
+        </button>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,7 @@ export function WorkspaceTree({ workspaceRoot, maxDepth = 5 }: WorkspaceTreeProp
   const tree = useWorkspaceTree({ path: workspaceRoot, maxDepth });
   const [openDirs, setOpenDirs] = useState<Record<string, TreeNode[] | null | undefined>>({});
   const [loadingDirs, setLoadingDirs] = useState<Record<string, boolean>>({});
+  const [refreshAnnouncement, setRefreshAnnouncement] = useState('');
 
   const toggleDir = async (node: TreeNode) => {
     const wasOpen = node.path in openDirs;
@@ -54,16 +55,36 @@ export function WorkspaceTree({ workspaceRoot, maxDepth = 5 }: WorkspaceTreeProp
     setLoadingDirs({});
   }, [workspaceRoot]);
 
+  // Phase 3 Wave 3: announce tree refreshes to screen readers via a
+  // visually-hidden aria-live region (UI-SPEC §12 — "Workspace updated").
+  useEffect(() => {
+    const off = window.localbot.on('tree:refresh', ((p: { rootPath?: string; changedPaths?: string[] }) => {
+      const count = p?.changedPaths?.length ?? 0;
+      setRefreshAnnouncement(count > 0 ? `Workspace updated (${count})` : 'Workspace updated');
+    }) as (p: unknown) => void);
+    return () => off();
+  }, []);
+
   return (
     <aside
       className="workspace-tree"
       data-testid="workspace-tree"
       aria-label="Workspace files"
       role="tree"
+      aria-live="polite"
+      aria-relevant="additions text"
     >
       <div className="workspace-tree-header">
         <span>Workspace</span>
         {tree.truncated && <span className="workspace-tree-truncated">truncated</span>}
+      </div>
+      <div
+        className="workspace-tree-status"
+        role="status"
+        aria-live="polite"
+        data-testid="workspace-tree-status"
+      >
+        {refreshAnnouncement}
       </div>
       {tree.loading && tree.entries.length === 0 && (
         <div className="workspace-tree-empty">loading…</div>
@@ -76,7 +97,7 @@ export function WorkspaceTree({ workspaceRoot, maxDepth = 5 }: WorkspaceTreeProp
       )}
       <ul className="workspace-tree-list" role="presentation">
         {tree.entries.map((e) => (
-          <li key={e.path} className="workspace-tree-item" role="presentation">
+          <li key={e.path} className="workspace-tree-item tree-node" role="presentation">
             {e.type === 'dir' ? (
               <DirRow
                 node={e}

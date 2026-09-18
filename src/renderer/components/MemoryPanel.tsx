@@ -67,6 +67,7 @@ export function MemoryPanel({ markdown, facts, loading, error, onClose }: Memory
         role="dialog"
         aria-modal="true"
         aria-labelledby="memory-panel-title"
+        aria-describedby="memory-panel-body"
         data-testid="memory-panel"
         onClick={(e) => e.stopPropagation()}
       >
@@ -84,34 +85,41 @@ export function MemoryPanel({ markdown, facts, loading, error, onClose }: Memory
           </button>
         </div>
 
-        {loading && (
-          <div className="memory-panel-loading">Loading memory…</div>
-        )}
+        <div
+          id="memory-panel-body"
+          className="memory-panel-body"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
+          {loading && (
+            <div className="memory-panel-loading">Loading memory…</div>
+          )}
 
-        {!loading && error && (
-          <div className="memory-panel-error">{error}</div>
-        )}
+          {!loading && error && (
+            <div className="memory-panel-error">{error}</div>
+          )}
 
-        {!loading && !error && markdown.length === 0 && factEntries.length === 0 && (
-          <div className="memory-panel-empty">Bot has not recorded any memory yet</div>
-        )}
+          {!loading && !error && markdown.length === 0 && factEntries.length === 0 && (
+            <div className="memory-panel-empty">Bot has not recorded any memory yet</div>
+          )}
 
-        {!loading && !error && markdown.length > 0 && (
-          <pre className="memory-panel-markdown" data-testid="memory-panel-markdown">
-            {markdown}
-          </pre>
-        )}
+          {!loading && !error && markdown.length > 0 && (
+            <pre className="memory-panel-markdown" data-testid="memory-panel-markdown">
+              {markdown}
+            </pre>
+          )}
 
-        {!loading && factEntries.length > 0 && (
-          <ul className="memory-panel-facts" data-testid="memory-panel-facts">
-            {factEntries.map(([name, f]) => (
-              <li key={name}>
-                <strong>{name}</strong>: {JSON.stringify(f.value)}
-                <span className="memory-panel-fact-source"> ({f.source ?? 'unknown'})</span>
-              </li>
-            ))}
-          </ul>
-        )}
+          {!loading && factEntries.length > 0 && (
+            <ul className="memory-panel-facts" data-testid="memory-panel-facts">
+              {factEntries.map(([name, f]) => (
+                <li key={name}>
+                  <strong>{name}</strong>: {JSON.stringify(f.value)}
+                  <span className="memory-panel-fact-source"> ({f.source ?? 'unknown'})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

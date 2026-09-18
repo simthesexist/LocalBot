@@ -438,12 +438,17 @@ html, body, #root {
 .memory-pill {
   font-size: 11px;
   font-family: var(--font-mono, monospace);
-  background: #f3f4f6;
-  border: 1px solid var(--color-border);
+  background: var(--lb-pill-bg);
+  border: 1px solid var(--lb-pill-border);
   border-radius: 999px;
   padding: 3px 10px;
-  color: var(--color-text-muted);
+  color: var(--lb-pill-text);
   cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.memory-pill:hover:not(:disabled) {
+  background: var(--lb-tree-hover);
 }
 
 .memory-pill:disabled {
@@ -496,11 +501,12 @@ html, body, #root {
 }
 
 .workspace-tree {
-  border-right: 1px solid var(--color-border);
-  background: #fafafa;
+  border-right: 1px solid var(--lb-sidebar-border);
+  background: var(--lb-sidebar-bg);
   padding: 12px;
   font-size: 12px;
   overflow: auto;
+  width: var(--lb-sidebar-width);
 }
 
 .workspace-tree-header {
@@ -541,6 +547,16 @@ html, body, #root {
 .workspace-tree-name {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
+  color: var(--lb-sidebar-text);
+}
+
+.workspace-tree-name:hover:not(.workspace-tree-file) {
+  background: var(--lb-tree-hover);
+}
+
+.workspace-tree-dir.is-selected,
+.workspace-tree-file.is-selected {
+  background: var(--lb-tree-selected);
 }
 
 .workspace-tree-empty,
@@ -570,6 +586,20 @@ html, body, #root {
   --lb-diff-remove: rgba(239, 68, 68, 0.14);
   --lb-tree-focus: #2563eb;
   --lb-debounce-refresh-ms: 250;
+  /* ─── Phase 3 Wave 3: additional tokens per UI-SPEC §2.1. ─── */
+  --lb-sidebar-bg: #f9fafb;
+  --lb-sidebar-border: var(--color-border);
+  --lb-sidebar-text: var(--color-text);
+  --lb-sidebar-text-muted: var(--color-text-muted);
+  --lb-tree-hover: #f3f4f6;
+  --lb-tree-selected: #e6f0ff;
+  --lb-pill-bg: #eff6ff;
+  --lb-pill-text: #1d4ed8;
+  --lb-pill-border: #bfdbfe;
+  --lb-session-active: #2563eb;
+  --lb-dropdown-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --lb-sidebar-width: 240px;
+  --lb-sidebar-width-collapsed: 32px;
 }
 
 /* MemoryPanel modal — full-viewport backdrop + card. */
@@ -701,12 +731,17 @@ html, body, #root {
 .session-trigger {
   font-size: 11px;
   font-family: var(--font-mono, monospace);
-  background: #f3f4f6;
+  background: var(--lb-tree-hover);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 3px 10px;
   color: var(--color-text-muted);
   cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.session-trigger:hover {
+  background: var(--lb-tree-selected);
 }
 
 .session-dropdown {
@@ -720,7 +755,7 @@ html, body, #root {
   background: var(--lb-dropdown-bg);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--lb-dropdown-shadow);
   z-index: 50;
   padding: 4px 0;
 }
@@ -740,7 +775,7 @@ html, body, #root {
 
 .session-dropdown-item:hover,
 .session-dropdown-item:focus-visible {
-  background: #f3f4f6;
+  background: var(--lb-tree-hover);
   outline: none;
 }
 
@@ -858,10 +893,28 @@ html, body, #root {
 .memory-pill:focus-visible,
 .session-trigger:focus-visible,
 .workspace-tree-dir:focus-visible,
+.workspace-tree-file:focus-visible,
+.tree-node:focus-visible,
+.session-dropdown button:focus-visible,
+.session-dropdown-item:focus-visible,
 .diff-header-toggle:focus-visible,
+.diff-mode-toggle button:focus-visible,
 .memory-panel-close:focus-visible {
   outline: 2px solid var(--lb-tree-focus);
   outline-offset: 2px;
+}
+
+/* Live region for screen readers (UI-SPEC §12). */
+.workspace-tree-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .session-loading-banner {
