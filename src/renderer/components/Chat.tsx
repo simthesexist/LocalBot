@@ -1,4 +1,8 @@
-// Chat pane.
+// Chat pane. Phase 3 Wave 2.
+//
+// Mounts the MemoryPill + SessionSwitcher in the header, renders the
+// head-of-file SummaryBlock at the top of the message list, and binds
+// the WorkspaceTree to the chokidar `tree:refresh` event via useWorkspaceTree.
 
 import { useEffect, useRef } from 'react';
 import { Composer } from './Composer';
@@ -7,11 +11,15 @@ import { MessageBlock } from './MessageBlock';
 import { ErrorBanner } from './ErrorBanner';
 import { MemoryPill } from './MemoryPill';
 import { WorkspaceTree } from './WorkspaceTree';
+import { SessionSwitcher } from './SessionSwitcher';
+import { SummaryBlock } from './SummaryBlock';
 import { useMessages } from '../state/messages';
+import { useCurrentSession } from '../state/sessions';
 import type { ChatMessage, MessageBlock as MessageBlockT } from '../../shared/types';
 
 export interface ChatProps {
   initialMessages: ChatMessage[];
+  workspaceRoot?: string;
 }
 
 function blocksForMessage(m: ChatMessage): MessageBlockT[] {
@@ -20,19 +28,26 @@ function blocksForMessage(m: ChatMessage): MessageBlockT[] {
   return [{ kind: 'text', text: m.content ?? '' }];
 }
 
-export function Chat({ initialMessages }: ChatProps) {
+export function Chat({ initialMessages, workspaceRoot = '.' }: ChatProps) {
   const {
     messages,
     streaming,
     activeMsgId,
     pendingAssistantContent,
     pendingBlocks,
+    toolUseBlocks,
     error,
     daemonStatus,
     setMessages,
-    setError,
     clearError,
   } = useMessages();
+
+  const {
+    headSummary,
+    currentSessionId,
+    switchSession,
+    loading: sessionLoading,
+  } = useCurrentSession('default');
 
   // Hydrate the loaded session on first render.
   const hydratedRef = useRef(false);
@@ -76,12 +91,17 @@ export function Chat({ initialMessages }: ChatProps) {
       <header className="chat-header" data-testid="chat-header">
         <span className="chat-title">Localbot</span>
         <div className="chat-header-right">
+          <SessionSwitcher
+            bot="default"
+            currentSessionId={currentSessionId}
+            onSelect={(id) => void switchSession(id)}
+          />
           <MemoryPill bot="default" />
         </div>
       </header>
 
       <div className="chat-body">
-        <WorkspaceTree workspaceRoot="." />
+        <WorkspaceTree workspaceRoot={workspaceRoot} />
         {daemonStatus.state !== 'ready' && (
           <ErrorBanner
             variant="daemon"
@@ -102,11 +122,17 @@ export function Chat({ initialMessages }: ChatProps) {
             onUpdateKey={onUpdateKey}
           />
         )}
+        {sessionLoading && (
+          <div className="session-loading-banner">Loading session…</div>
+        )}
 
         <div className="message-list" ref={listRef}>
+          {headSummary && <SummaryBlock summary={headSummary} />}
           {messages.map((m) => {
             const blocks = blocksForMessage(m);
             const showStopped = m.stopped && m.role === 'assistant';
+            // Skip summary rows — already rendered by SummaryBlock.
+            if (m.role === 'summary') return null;
             return (
               <div
                 key={m.msgId ?? `${m.ts}-${m.role}`}
@@ -115,7 +141,7 @@ export function Chat({ initialMessages }: ChatProps) {
               >
                 <div className="bubble-content">
                   {blocks.map((b, i) => (
-                    <MessageBlock key={i} block={b} />
+                    <MessageBlock key={i} block={b} toolUseBlocks={toolUseBlocks} />
                   ))}
                   {showStopped && <span className="bubble-stopped"> (stopped)</span>}
                 </div>
@@ -154,7 +180,7 @@ export function Chat({ initialMessages }: ChatProps) {
               >
                 <div className="bubble-content">
                   {liveBlocks.map((b, i) => (
-                    <MessageBlock key={`b-${i}`} block={b} />
+                    <MessageBlock key={`b-${i}`} block={b} toolUseBlocks={toolUseBlocks} />
                   ))}
                   {content.length > 0 && <div className="block-text">{content}</div>}
                 </div>

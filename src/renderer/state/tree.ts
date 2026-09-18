@@ -1,11 +1,12 @@
-// Workspace tree state hook. Phase 3 tracer slice.
+// Workspace tree state hook. Phase 3 Wave 2.
 //
 // Fetches TreeListResult via window.localbot.tree.list({path, maxDepth,
-// exclude}) and exposes it for WorkspaceTree. The maxDepth defaults to 2
-// for the placeholder pill — full tree browsing is a follow-up plan.
+// exclude}) and exposes it for WorkspaceTree. Subscribes to `tree:refresh`
+// events from the daemon's chokidar watcher and re-invokes tree:list when
+// the bound path matches the event's rootPath prefix.
 
 import { useEffect, useState, useCallback } from 'react';
-import type { TreeListResult } from '../../shared/types';
+import type { TreeListResult, TreeRefreshEvent } from '../../shared/types';
 
 export interface TreeState {
   path: string;
@@ -22,7 +23,11 @@ const INITIAL: Omit<TreeState, 'path'> = {
   error: null,
 };
 
-export function useWorkspaceTree(opts: { path: string; maxDepth?: number; exclude?: string[] }): TreeState & { refresh: () => Promise<void> } {
+export interface UseWorkspaceTreeApi extends TreeState {
+  refresh: () => Promise<void>;
+}
+
+export function useWorkspaceTree(opts: { path: string; maxDepth?: number; exclude?: string[] }): UseWorkspaceTreeApi {
   const [state, setState] = useState<TreeState>({
     ...INITIAL,
     path: opts.path,
@@ -62,7 +67,21 @@ export function useWorkspaceTree(opts: { path: string; maxDepth?: number; exclud
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    const off = window.localbot.on('tree:refresh', ((p: TreeRefreshEvent) => {
+      // Only refresh when the event's rootPath is a prefix of our bound
+      // path (or vice versa) — chokidar emits one event per root.
+      const eventRoot = p?.rootPath ?? '';
+      if (!eventRoot) return;
+      // Normalize for prefix comparison on Windows.
+      const normalize = (s: string) => s.replace(/\\/g, '/').replace(/\/+$/g, '');
+      const e = normalize(eventRoot);
+      const bound = normalize(opts.path);
+      if (e === bound || e.startsWith(bound + '/') || bound.startsWith(e + '/')) {
+        void refresh();
+      }
+    }) as (p: unknown) => void);
+    return () => off();
+  }, [refresh, opts.path]);
 
   return { ...state, refresh };
 }

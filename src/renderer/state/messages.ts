@@ -3,17 +3,27 @@
 // Phase 2: subscribes to message:tool_use + message:tool_result and appends
 // the corresponding blocks to a per-msgId blocks store. On message:done the
 // blocks array is frozen into the persisted ChatMessage.
+//
+// Phase 3 Wave 2: also keeps a toolUseBlocks map (tool_use_id → {name, input})
+// so MessageBlock can render a DiffView for `edit_file` tool_result blocks
+// by looking up the source tool_use.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ChatMessage,
   DaemonStatus,
   ErrorEvent,
+  HistoryLoadedEvent,
   MessageBlock,
   TokenEvent,
   ToolResultEvent,
   ToolUseEvent,
 } from '../../shared/types';
+
+export interface ToolUseMeta {
+  name: string;
+  input: unknown;
+}
 
 export interface UseMessagesApi {
   messages: ChatMessage[];
@@ -25,6 +35,9 @@ export interface UseMessagesApi {
   pendingAssistantContent: Record<string, string>;
   /** Phase 2: per-msgId blocks table driving the renderer bubble. */
   pendingBlocks: Record<string, MessageBlock[]>;
+  /** Phase 3 Wave 2: live `tool_use_id → {name, input}` map for the active
+   *  msgId so DiffView can render edit_file tool_result blocks inline. */
+  toolUseBlocks: Record<string, ToolUseMeta>;
   setMessages: (m: ChatMessage[]) => void;
   appendUserMsg: (content: string, msgId: string) => void;
   appendDelta: (msgId: string, delta: string) => void;
@@ -47,6 +60,7 @@ export function useMessages(): UseMessagesApi {
   const [daemonStatus, setDaemonStatusState] = useState<DaemonStatus>({ state: 'connecting' });
   const [pendingAssistantContent, setPendingAssistantContent] = useState<Record<string, string>>({});
   const [pendingBlocks, setPendingBlocks] = useState<Record<string, MessageBlock[]>>({});
+  const [toolUseBlocks, setToolUseBlocks] = useState<Record<string, ToolUseMeta>>({});
 
   // Keep a stable ref to the active msg id for cancel transport.
   const activeMsgIdRef = useRef<string | null>(null);
@@ -71,6 +85,12 @@ export function useMessages(): UseMessagesApi {
         ...prev,
         [p.msgId]: [...(prev[p.msgId] ?? []), block],
       }));
+      // Phase 3 Wave 2: stash name+input so the matching tool_result block
+      // can render a DiffView when name === 'edit_file'.
+      setToolUseBlocks((prev) => ({
+        ...prev,
+        [p.toolUseId]: { name: p.name, input: p.input },
+      }));
     }) as (p: unknown) => void);
 
     const offToolResult = window.localbot.on('message:tool_result', ((p: ToolResultEvent) => {
@@ -84,6 +104,9 @@ export function useMessages(): UseMessagesApi {
         ...prev,
         [p.msgId]: [...(prev[p.msgId] ?? []), block],
       }));
+      // We keep the toolUseBlocks entry around until message:done so the
+      // frozen blocks can still resolve their tool_use lookups (see
+      // finalizeMsg path).
     }) as (p: unknown) => void);
 
     const offDone = window.localbot.on('message:done', ((p: { msgId: string }) => {
@@ -107,6 +130,9 @@ export function useMessages(): UseMessagesApi {
         delete next[p.msgId];
         return next;
       });
+      // Don't drop toolUseBlocks here — finalizeMsg's flow needs the lookup
+      // table when assembling the final blocks array on persisted history.
+      // We DO clear it once the frozen ChatMessage exists (finalize path).
       setStreaming(false);
       setActiveMsgIdState(null);
       setActiveRole(null);
@@ -152,6 +178,16 @@ export function useMessages(): UseMessagesApi {
       setDaemonStatusState(p);
     }) as (p: unknown) => void);
 
+    const offHistoryLoaded = window.localbot.on('history:loaded', ((p: HistoryLoadedEvent) => {
+      // Phase 3 Wave 2: when a session is reloaded, drop the live block
+      // tables so a stale tool_use from the previous session doesn't bleed
+      // into the new bubble.
+      setPendingBlocks({});
+      setPendingAssistantContent({});
+      setToolUseBlocks({});
+      void p?.sessionId; // referenced for linter
+    }) as (p: unknown) => void);
+
     return () => {
       offToken();
       offToolUse();
@@ -159,6 +195,7 @@ export function useMessages(): UseMessagesApi {
       offDone();
       offError();
       offDaemon();
+      offHistoryLoaded();
     };
   }, []);
 
@@ -214,6 +251,21 @@ export function useMessages(): UseMessagesApi {
         delete next[msgId];
         return next;
       });
+      // Phase 3 Wave 2: drop the live toolUseBlocks entries that belong to
+      // the finalized msgId. We approximate by clearing entries whose key
+      // shows up in the now-finalized blocks array.
+      setToolUseBlocks((prev) => {
+        if (!blocks) return prev;
+        const used = new Set<string>();
+        for (const b of blocks) {
+          if (b.kind === 'tool_use') used.add(b.id);
+          else if (b.kind === 'tool_result') used.add(b.toolUseId);
+        }
+        if (used.size === 0) return prev;
+        const next = { ...prev };
+        for (const k of used) delete next[k];
+        return next;
+      });
     },
     [],
   );
@@ -234,6 +286,7 @@ export function useMessages(): UseMessagesApi {
     daemonStatus,
     pendingAssistantContent,
     pendingBlocks,
+    toolUseBlocks,
     setMessages,
     appendUserMsg,
     appendDelta,
