@@ -1,10 +1,10 @@
 ---
 gsd_state_version: "1.0"
 status: phase_3_post_verify
-stopped_at: Phase 3 plans + execution complete; renderer-mount + daemon-spawn blockers closed via debug sessions (memory-pill-missing, daemon-spawn-headed); G-3-2 + G-3-3 remain as separate defects; repo pushed to github.com/simthesexist/LocalBot; README added
-last_updated: "2026-09-18T15:00:00.000Z"
+stopped_at: Phase 3 plans + execution complete; G-3-2 code-closed via quick task 260918-mtv (b2b370c); G-3-3 (DiffView + chokidar flaky on Windows headed) is the only remaining defect; repo live on github.com/simthesexist/LocalBot; Phase 4 unblocked
+last_updated: "2026-09-18T15:35:00.000Z"
 last_activity: 2026-09-18
-state_head: 6784033d4e1bea256ffc58e35556df32a4e2c522
+state_head: 1ffc50896aae882538e50609740b13a5ef70d622
 progress:
   total_phases: 9
   completed_phases: 1
@@ -13,7 +13,7 @@ progress:
   total_plans: 8
   completed_plans: 8
   percent: 22
-current_phase_name: Memory + Conversation History (executed, post-verify)
+current_phase_name: Memory + Conversation History (executed, post-verify, 1 defect remaining)
 ---
 
 # State: Localbot
@@ -96,7 +96,7 @@ None.
 | Gap | Status | Truth | Notes |
 |-----|--------|-------|-------|
 | G-3-1 | resolved | MemoryPill + WorkspaceTree render + chat turn | Renderer-mount blocker fixed |
-| G-3-2 | open | SessionSwitcher lists 2+ sessions, restart-reload round-trip | Missing `window.localbot.invoke` in preload for SessionSwitcher generic IPC |
+| G-3-2 | code-closed | SessionSwitcher lists 2+ sessions, restart-reload round-trip | `window.localbot.invoke(channel, payload?)` added to preload + types; unit + tsc clean; headed smoke `LOCALBOT_SMOKE_OK=1` still required on desktop |
 | G-3-3 | open | WorkspaceTree + DiffView + binary placeholder + chokidar refresh | DiffView + chokidar flaky on Windows headed |
 | G-3-4 | resolved | Headed Electron streams a chat turn end-to-end | Daemon-spawn bootstrap closed |
 
@@ -106,6 +106,7 @@ None.
 |---|-------------|------|--------|-----------|
 | 260917-vlw | spawn.ts daemon-path ENOENT fix: extract resolveDaemonEntry + cpSync daemon/ into dist/main/daemon/ after tsc | 2026-09-17 | b67825c | [260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai](./quick/260917-vlw-fix-spawn-ts-resolves-daemon-to-dist-mai/) |
 | 260917-vvk | window.ts dev-mode renderer URL fix: branch on built-index existence, not `!app.isPackaged` (unpackaged `npm start` was hitting localhost:5173) | 2026-09-17 | d6ad10e | [260917-vvk-fix-src-main-window-ts-10-uses-isdev-app](./quick/260917-vvk-fix-src-main-window-ts-10-uses-isdev-app/) |
+| 260918-mtv | G-3-2 preload bridge: add generic `invoke(channel, payload?)` typed proxy + unit tests for SessionSwitcher + any future generic IPC caller | 2026-09-18 | b2b370c | [260918-mtv-fix-sessionswitcher-window-localbot-invo](./quick/260918-mtv-fix-sessionswitcher-window-localbot-invo/) |
 
 ### Todos
 
@@ -122,7 +123,7 @@ None.
 - [x] Create + push to GitHub (`simthesexist/LocalBot`)
 - [x] Add README.md
 - [x] Refresh STATE.md (this commit)
-- [ ] Close G-3-2 (SessionSwitcher `window.localbot.invoke` preload)
+- [x] Close G-3-2 preload code-fix (`window.localbot.invoke` added; headed smoke `LOCALBOT_SMOKE_OK=1` still required on a desktop machine)
 - [ ] Close G-3-3 (DiffView + chokidar flaky on Windows headed)
 - [ ] Plan Phase 4 (`/gsd-plan-phase 4`)
 - [ ] Execute Phase 4 (`/gsd-execute-phase 4`)
@@ -130,13 +131,13 @@ None.
 
 ## Session Continuity
 
-**Stopped at:** Phase 3 executed; renderer-mount + daemon-spawn blockers closed; 2 separate defects (G-3-2, G-3-3) remain; repo live on GitHub; ready for Phase 4 planning or to close remaining gaps first
+**Stopped at:** Phase 3 executed; G-3-2 preload code-closed via quick task `260918-mtv` (commit `b2b370c`); only G-3-3 (DiffView + chokidar flaky on Windows headed) remains; repo live on GitHub; ready for Phase 4 planning
 **Resume file:** `.planning/phases/03-memory-conversation-history/03-UAT.md` (open gaps) or `.planning/ROADMAP.md` (Phase 4 trigger)
 
-Last session: 2026-09-18T15:00:00.000Z
+Last session: 2026-09-18T15:35:00.000Z
 Last activity: 2026-09-18
 
-Next action: `/gsd-quick "fix SessionSwitcher window.localbot.invoke preload gap"` or `/gsd-plan-phase 4` — both unblocked; choice depends on whether you want Phase 3 green first or want to start Phase 4 planning.
+Next action: `/gsd-plan-phase 4` (unblocked) or `/gsd-debug diff-view-chokidar-headed` to close G-3-3.
 
 ---
 
