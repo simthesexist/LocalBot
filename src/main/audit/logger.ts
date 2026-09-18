@@ -15,6 +15,23 @@ export interface AuditInput {
   tool_use_id?: string;
 }
 
+/**
+ * Phase 3 Wave 2: explicit shapes for the new ops so call-sites get type
+ * safety without re-declaring the literal `tool` string. The writer itself
+ * is unchanged; the canonical shape is `{ts, bot, tool, params, outcome,
+ * durationMs, error?, tool_use_id?}` (SEC-04).
+ */
+export interface MemoryAuditInput extends AuditInput {
+  tool: 'memory.read' | 'memory.write' | 'memory.update';
+}
+export interface TreeAuditInput extends AuditInput {
+  tool: 'tree.list' | 'tree.refresh';
+}
+export interface SummaryAuditInput extends AuditInput {
+  tool: 'summarize' | 'summary.cancel';
+}
+export type AnyAuditInput = AuditInput | MemoryAuditInput | TreeAuditInput | SummaryAuditInput;
+
 function utcDateString(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }

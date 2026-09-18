@@ -33,6 +33,30 @@ export interface SummarizeResult {
   factsDelta: Facts;
 }
 
+/** Error shape surfaced to the caller when the summary is cancelled mid-flight. */
+export class SummarizeAbortError extends Error {
+  readonly category = 'cancel';
+  readonly code = 'aborted';
+  constructor(message: string = 'summarizer aborted') {
+    super(message);
+  }
+}
+
+export interface RunSummarizerOptions {
+  /**
+   * Outer cancel signal — the user's per-msgId controller. When this fires
+   * we abort the SUMMARY call only via the inner childController. We NEVER
+   * abort the outer streamChat retry from this path.
+   */
+  outerSignal: AbortSignal;
+  /**
+   * Optional pre-derived child signal. When provided, the caller owns the
+   * controller and can decide whether to abort just the summary while
+   * keeping the outer signal untouched (RESEARCH.md §"Pitfall 4").
+   */
+  childSignal?: AbortSignal;
+}
+
 const SUMMARIZER_SYSTEM =
   'You are a concise summarizer. Output JSON only: ' +
   '{"summary":"<<=300 words>", "facts":{"<name>":{"value":<value>,"source":"summary","updatedAt":"<iso>"}}}. ' +
@@ -42,21 +66,40 @@ const SUMMARIZER_SYSTEM =
  * Run the summarizer. Uses its OWN runWithRetry instance (separate budget
  * from the outer streamChat), and a child AbortSignal so user cancel
  * aborts just this call.
+ *
+ * Accepts either the legacy `(turns, signal)` signature OR the new
+ * `(turns, { outerSignal, childSignal? })` shape. The legacy form derives
+ * a child signal internally so existing callers continue to compile.
  */
 export async function runSummarizer(
   turns: ChatMessage[],
-  signal: AbortSignal,
+  signalOrOpts: AbortSignal | RunSummarizerOptions,
 ): Promise<SummarizeResult> {
+  const opts: RunSummarizerOptions =
+    typeof signalOrOpts === 'object' && signalOrOpts && 'outerSignal' in signalOrOpts
+      ? signalOrOpts
+      : { outerSignal: signalOrOpts as AbortSignal };
+
+  const outerSignal = opts.outerSignal;
+  if (outerSignal && outerSignal.aborted) {
+    throw new SummarizeAbortError('outer signal already aborted before summarizer started');
+  }
+
   const apiKey = await readKey();
   const client = new Anthropic({ apiKey, baseURL: M3_API_BASE });
 
-  // Child signal: combines the caller's signal with a fresh controller so we
-  // can independently abort this call. Production code never sees the inner
-  // controller; the outer signal is the only handle callers carry.
-  const childController = new AbortController();
-  const onParentAbort = () => childController.abort();
-  if (signal.aborted) childController.abort();
-  else signal.addEventListener('abort', onParentAbort, { once: true });
+  // Child signal — either supplied by the caller (preferred) or derived
+  // here from a fresh controller so the inner SDK call can be aborted
+  // independently. Production callers (chat.ts) own a per-call controller
+  // so it can reset between turns.
+  const ownsChild = !opts.childSignal;
+  const childController = ownsChild ? new AbortController() : null;
+  const childSignal: AbortSignal = opts.childSignal ?? childController!.signal;
+
+  const onParentAbort = () => {
+    if (childController) childController.abort();
+  };
+  outerSignal.addEventListener('abort', onParentAbort, { once: true });
 
   try {
     const userContent = turns
@@ -78,22 +121,34 @@ export async function runSummarizer(
         max_tokens: 1024,
         system: SUMMARIZER_SYSTEM,
         messages: [{ role: 'user', content: userContent }],
-      }, { signal: childController.signal }) as Promise<Anthropic.Messages.Message>,
+      }, { signal: childSignal }) as Promise<Anthropic.Messages.Message>,
       {
         attempts: 3,
         baseDelayMs: 250,
         // Summarizer retries are limited to transient / network failures —
         // auth errors and fatal errors bubble up immediately so the outer
-        // loop can decide whether to fall back.
-        isRetryable: (e) => e.category === 'transient' || e.category === 'network',
+        // loop can decide whether to fall back. When the child has been
+        // aborted (user cancelled mid-summary) we stop retrying.
+        isRetryable: (e) =>
+          (e.category === 'transient' || e.category === 'network') &&
+          !childSignal.aborted,
       },
     );
+
+    if (childSignal.aborted) {
+      throw new SummarizeAbortError('child signal aborted after response');
+    }
 
     const text = response.content?.find((b) => b.type === 'text') as { type: 'text'; text: string } | undefined;
     const raw = text?.text ?? '';
     return parseSummarizerResponse(raw);
+  } catch (err) {
+    if (childSignal.aborted && !(err instanceof SummarizeAbortError)) {
+      throw new SummarizeAbortError((err as Error)?.message ?? 'aborted');
+    }
+    throw err;
   } finally {
-    signal.removeEventListener('abort', onParentAbort);
+    outerSignal.removeEventListener('abort', onParentAbort);
   }
 }
 
@@ -118,4 +173,4 @@ function parseSummarizerResponse(raw: string): SummarizeResult {
 }
 
 /** Test hook — exported only so unit tests can exercise the parser. */
-export const __TESTING__ = { parseSummarizerResponse };
+export const __TESTING__ = { parseSummarizerResponse, SummarizeAbortError };

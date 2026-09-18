@@ -10,6 +10,7 @@ import { registerTreeHandlers } from './ipc/tree';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs } from './paths';
 import { appendAuditLine } from './audit/logger';
+import { ensureTreeWatcherStarted } from './tree/list';
 
 // Enforce single instance.
 const gotLock = app.requestSingleInstanceLock();
@@ -53,6 +54,9 @@ void app.whenReady().then(async () => {
 
   // Spawn daemon last so it doesn't block window boot.
   void spawnDaemon();
+  // Wire the daemon's tree:refresh notifications to the renderer's
+  // EVENT_TREE_REFRESH broadcast.
+  ensureTreeWatcherStarted();
 
   app.on('activate', () => {
     if (require('electron').BrowserWindow.getAllWindows().length === 0) {

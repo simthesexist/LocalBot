@@ -213,6 +213,10 @@ export interface HistoryAppendedEvent {
   sessionId: string;
   msgId?: string;
   summary?: SummaryRecord;
+  /** Phase 3 Wave 2: emitted true when a mid-flight summary was aborted by
+   *  user cancel so the SessionSwitcher dropdown can omit it from the
+   *  messageCount delta. */
+  aborted?: boolean;
 }
 
 export interface TreeRefreshEvent {

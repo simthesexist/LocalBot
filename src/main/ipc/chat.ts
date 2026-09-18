@@ -62,15 +62,34 @@ function broadcastHistoryAppended(bot: string, sessionId: string, msgId?: string
  * should re-read the session if it needs the head summary). The summarizer
  * uses its own retry budget + child AbortSignal; failures are swallowed so
  * the chat flow can still proceed without a summary.
+ *
+ * Phase 3 Wave 2 (RESEARCH.md §"Pitfall 4"): the user's outer signal (the
+ * per-msgId `AbortController`) is NEVER touched from this path. When the
+ * user clicks Stop, we abort a CHILD controller instead, so cancelling
+ * mid-summary aborts only the summary SDK call — the outer streamChat retry
+ * is bypassed.
  */
 async function maybeSummarize(
   ctx: SessionContext,
   messages: ChatMessage[],
-  signal: AbortSignal,
+  outerSignal: AbortSignal,
 ): Promise<boolean> {
   if (messages.length < 4) return false;
+
+  // Per-call child controller. When the outer signal aborts, linkAbort
+  // forwards the abort to the child; the outer controller itself is owned
+  // by the cancel IPC handler and is NEVER touched from this path.
+  const childController = new AbortController();
+  const linkAbort = () => {
+    try { childController.abort(); } catch { /* ignore */ }
+  };
+  outerSignal.addEventListener('abort', linkAbort, { once: true });
+
   try {
-    const result = await runSummarizer(messages, signal);
+    const result = await runSummarizer(messages, {
+      outerSignal,
+      childSignal: childController.signal,
+    });
     if (!result.summary || result.summary.length === 0) return false;
     await prependSummary(ctx.bot, ctx.sessionId, {
       summary: result.summary,
@@ -99,9 +118,22 @@ async function maybeSummarize(
     });
     return true;
   } catch (err) {
+    // SummarizeAbortError (outer cancelled mid-summary) is the ONLY error
+    // path that fires from cancel — outer is unchanged.
+    const code = (err as { code?: string }).code;
+    if (code === 'aborted') {
+      broadcast(CHANNELS.EVENT_HISTORY_APPENDED, {
+        kind: 'summary',
+        bot: ctx.bot,
+        sessionId: ctx.sessionId,
+        aborted: true,
+      });
+    }
     // eslint-disable-next-line no-console
     console.warn('[summarize] failed; continuing without summary', (err as Error).message);
     return false;
+  } finally {
+    outerSignal.removeEventListener('abort', linkAbort);
   }
 }
 

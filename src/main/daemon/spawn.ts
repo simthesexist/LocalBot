@@ -14,6 +14,7 @@ let daemonProc: ChildProcess | null = null;
 let initialized = false;
 let nextId = 1;
 const pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timeout: NodeJS.Timeout }>();
+const notificationListeners = new Map<string, Set<(params: unknown) => void>>();
 let activeToolCallId: string | null = null;
 let intentionalStop = false;
 let respawnAttempts = 0;
@@ -243,8 +244,41 @@ function attachLineReader(proc: ChildProcess): void {
       p.resolve(obj);
       return;
     }
-    // Out-of-band notification handling can go here.
+    // Phase 3 Wave 2: notifications from the daemon (no `id`, but `method`).
+    // The line reader in protocol.cjs tolerates extra fields; dispatch to
+    // any listeners registered via onNotification().
+    const method = (obj as { method?: unknown }).method;
+    if (typeof method === 'string') {
+      const set = notificationListeners.get(method);
+      if (set && set.size > 0) {
+        const params = (obj as { params?: unknown }).params;
+        for (const cb of Array.from(set)) {
+          try { cb(params); } catch { /* listener errors must not break the bridge */ }
+        }
+      }
+    }
   });
+}
+
+/**
+ * Subscribe to a daemon-emitted notification channel (e.g. `tree:refresh`).
+ * Returns an unsubscribe function. Listeners are called synchronously from
+ * the line-reader tick; throws are swallowed so one bad listener does not
+ * take down the bridge for the others.
+ */
+export function onNotification(method: string, cb: (params: unknown) => void): () => void {
+  let set = notificationListeners.get(method);
+  if (!set) {
+    set = new Set();
+    notificationListeners.set(method, set);
+  }
+  set.add(cb);
+  return () => {
+    const cur = notificationListeners.get(method);
+    if (!cur) return;
+    cur.delete(cb);
+    if (cur.size === 0) notificationListeners.delete(method);
+  };
 }
 
 function scheduleRespawn(): void {
@@ -345,6 +379,8 @@ export async function spawnDaemon(): Promise<void> {
   // Send initialize. Phase 2: include workspaceRoot so the daemon's
   // safe_path can resolve paths against the bot workspace. Lazy-create the
   // workspace dir so the daemon's first tools/call finds it ready.
+  // Phase 3 Wave 2: also pass treeRoots so the daemon can wire up the
+  // chokidar watcher and emit `tree:refresh` notifications.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { ensureWorkspace, ensureBotDir, botDir, userDataDir } = require('../paths');
   const workspaceRoot = await ensureWorkspace();
@@ -362,6 +398,10 @@ export async function spawnDaemon(): Promise<void> {
       bot: initBot,
       workspaceRoot,
       botDir: botDir(initBot),
+      treeRoots: [
+        { id: 'workspace', absPath: workspaceRoot },
+        { id: 'bots', absPath: botDir(initBot) },
+      ],
     },
   };
   try {

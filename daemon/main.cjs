@@ -5,6 +5,7 @@ const path = require('node:path');
 const { writeMessage, readMessage } = require('./protocol.cjs');
 const registry = require('./tools/registry.cjs');
 const audit = require('./audit.cjs');
+const { createWatcher } = require('./watcher.cjs');
 
 // Phase 2: per-bot policy lives in the daemon; the orchestrator (main)
 // forwards params.bot on initialize and params.bot on every tools/call.
@@ -64,6 +65,17 @@ function replyResult(id, result) {
   reply({ jsonrpc: '2.0', id, result });
 }
 
+// Phase 3 Wave 2: unsolicited notifications (no `id`) are framed as
+// `{"jsonrpc":"2.0","method":"<channel>","params":{...}}` and emitted on the
+// same NDJSON pipe as request/response. The `readMessage` parser already
+// returns any JSON object; main's spawn bridge routes notifications with a
+// `method` field to registered listeners.
+let activeWatcher = null;
+
+function sendNotification(method, params) {
+  reply({ jsonrpc: '2.0', method, params });
+}
+
 // Handshake: write { kind: 'ready' } as the very first line.
 writeMessage(process.stdout, { kind: 'ready', version: '0.3.0' });
 
@@ -105,6 +117,33 @@ rl.on('line', async (line) => {
         } else if (params && typeof params.userDataDir === 'string' && typeof params.bot === 'string') {
           botDir = path.join(params.userDataDir, 'bots', params.bot);
         }
+
+        // Phase 3 Wave 2: filesystem watcher for live tree refresh. The
+        // orchestrator passes the root paths it wants watched; the daemon
+        // debounces change events to a single `tree:refresh` notification
+        // per debounce window (default 250ms; RESEARCH.md §"Pitfall 3").
+        const treeRoots = (params && Array.isArray(params.treeRoots))
+          ? params.treeRoots.filter((r) => r && typeof r.absPath === 'string' && r.absPath.length > 0)
+          : [];
+        if (activeWatcher) {
+          try { activeWatcher.stop(); } catch { /* ignore */ }
+          activeWatcher = null;
+        }
+        if (treeRoots.length > 0) {
+          activeWatcher = createWatcher(treeRoots, { debounceMs: 250 });
+          activeWatcher.on('refresh', (payload) => {
+            sendNotification('tree:refresh', payload);
+            audit.appendAudit({
+              tool: 'tree.refresh',
+              bot: currentBot,
+              params: { rootPath: payload.rootPath, changedCount: payload.changedPaths.length },
+              outcome: 'ok',
+              durationMs: 0,
+            });
+          });
+          activeWatcher.start();
+        }
+
         replyResult(id, { ...SERVER_INFO, tools: registry.listTools() });
         break;
       }
@@ -305,7 +344,11 @@ rl.on('line', async (line) => {
   }
 });
 
-rl.on('close', () => {
+rl.on('close', async () => {
+  if (activeWatcher) {
+    try { await activeWatcher.stop(); } catch { /* ignore */ }
+    activeWatcher = null;
+  }
   process.exit(0);
 });
 
