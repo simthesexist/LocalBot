@@ -30,7 +30,22 @@ export interface TreeAuditInput extends AuditInput {
 export interface SummaryAuditInput extends AuditInput {
   tool: 'summarize' | 'summary.cancel';
 }
-export type AnyAuditInput = AuditInput | MemoryAuditInput | TreeAuditInput | SummaryAuditInput;
+/**
+ * Phase 4 Wave 1: per-bot metadata CRUD ops. The daemon writes the
+ * canonical audit line via its own appendAudit (audit.cjs); main only
+ * sees synthetic audit lines when the renderer-facing `bots/<method>`
+ * JSON-RPC bridge rejects early or fails before the daemon can observe
+ * the call.
+ */
+export interface BotAuditInput extends AuditInput {
+  tool: 'bots.list' | 'bots.create' | 'bots.delete';
+}
+export type AnyAuditInput =
+  | AuditInput
+  | MemoryAuditInput
+  | TreeAuditInput
+  | SummaryAuditInput
+  | BotAuditInput;
 
 function utcDateString(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD

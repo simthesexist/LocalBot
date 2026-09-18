@@ -15,6 +15,11 @@ export const CHANNELS = {
   MEMORY_READ: 'memory:read',
   TREE_LIST: 'tree:list',
 
+  // Phase 4 Wave 1: bot metadata CRUD IPC channels.
+  BOTS_LIST: 'bots:list',
+  BOTS_CREATE: 'bots:create',
+  BOTS_DELETE: 'bots:delete',
+
   // Renderer -> main (one-way): ask main to re-send app:init so the renderer
   // can close the race window between `did-finish-load` (main fires the
   // initial send) and React's first `useEffect` (renderer registers the
@@ -36,6 +41,10 @@ export const CHANNELS = {
   EVENT_MEMORY_UPDATED: 'memory:updated',
   EVENT_HISTORY_LOADED: 'history:loaded',
   EVENT_HISTORY_APPENDED: 'history:appended',
+
+  // Phase 4 Wave 1: bot events.
+  EVENT_BOT_LIST_UPDATED: 'bot:list:updated',
+  EVENT_BOT_STATUS: 'bot:status',
 
   // Lifecycle
   LIFECYCLE: 'lifecycle',
