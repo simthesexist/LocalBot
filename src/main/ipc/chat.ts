@@ -1,25 +1,107 @@
 // Chat IPC: sendMessage + cancel. Per-msgId AbortController map.
 //
-// Phase 2: replace the direct streamChat call with runAgenticLoop. Tool
-// callbacks broadcast EVENT_MESSAGE_TOOL_USE + EVENT_MESSAGE_TOOL_RESULT.
-// The assistant turn is persisted with the full `blocks` array so the
-// next session reload can re-render the tool surface.
+// Phase 3 tracer slice:
+//   - Per-bot sessionId generation; new session for every message group.
+//   - JSONL append routes to <sessionsDir>/<bot>/<sessionId>.jsonl (Pitfall 3
+//     migration runs once on first sendMessage).
+//   - System prompt is built from DEFAULT_SYSTEM_PROMPT + a memory suffix
+//     injected from the bot's memory.md + facts.json. The renderer never
+//     sees the memory payload directly.
+//   - usageAccumulator tracks input/output/cache tokens across the loop.
+//   - When the running total crosses SOFT_CAP, maybeSummarize runs a
+//     dedicated turn against the M3 API, prepends the summary row to the
+//     JSONL, and broadcasts EVENT_HISTORY_APPENDED.
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { CHANNELS } from '../../shared/ipc-channels';
 import { runAgenticLoop } from '../llm/loop';
-import { appendMessage } from '../sessions/jsonl';
+import { readMemory, injectMemorySuffix, mergeFacts } from '../bots/memory';
+import { callMemory } from '../daemon/spawn';
+import {
+  appendMessage,
+  generateSessionId,
+  loadSession,
+  migrateLegacyGlobalJsonl,
+  prependSummary,
+  SessionContext,
+} from '../sessions/jsonl';
+import * as usageAccumulator from '../llm/usageAccumulator';
+import { runSummarizer } from '../llm/summarize';
 import { classifyError } from '../errors';
 import { cancelToolCall, getActiveToolCallId } from '../daemon/spawn';
 import { TOOL_SCHEMAS } from '../llm/tools';
 import { DEFAULT_SYSTEM_PROMPT } from '../llm/prompts';
-import type { SendMessageRequest } from '../../shared/types';
+import type { SendMessageRequest, ChatMessage } from '../../shared/types';
 
 const activeStreams = new Map<string, AbortController>();
+
+/**
+ * Soft cap on accumulated usage tokens. When the running total crosses this
+ * number, the next sendMessage call runs runSummarizer before streaming the
+ * answer. Overridable via `LOCALBOT_SOFT_CAP_TOKENS` for local tuning.
+ */
+const SOFT_CAP = Number(process.env.LOCALBOT_SOFT_CAP_TOKENS) || 100_000;
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send(channel, payload);
+  }
+}
+
+function broadcastHistoryAppended(bot: string, sessionId: string, msgId?: string): void {
+  broadcast(CHANNELS.EVENT_HISTORY_APPENDED, {
+    kind: 'message',
+    bot,
+    sessionId,
+    msgId,
+  });
+}
+
+/**
+ * Try the soft-cap summarizer. Returns true when summarization ran (caller
+ * should re-read the session if it needs the head summary). The summarizer
+ * uses its own retry budget + child AbortSignal; failures are swallowed so
+ * the chat flow can still proceed without a summary.
+ */
+async function maybeSummarize(
+  ctx: SessionContext,
+  messages: ChatMessage[],
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (messages.length < 4) return false;
+  try {
+    const result = await runSummarizer(messages, signal);
+    if (!result.summary || result.summary.length === 0) return false;
+    await prependSummary(ctx.bot, ctx.sessionId, {
+      summary: result.summary,
+      turnsFolded: messages.length,
+      ranAt: new Date().toISOString(),
+      msgId: `summary-${Date.now()}`,
+    });
+    if (result.factsDelta && Object.keys(result.factsDelta).length > 0) {
+      try {
+        const current = await readMemory(ctx.bot);
+        const merged = mergeFacts(current.facts, result.factsDelta);
+        await callMemory('memory/write', {
+          bot: ctx.bot,
+          markdown: current.markdown,
+          facts: merged,
+        });
+      } catch (factsErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[memory] facts merge failed', factsErr);
+      }
+    }
+    broadcast(CHANNELS.EVENT_HISTORY_APPENDED, {
+      kind: 'summary',
+      bot: ctx.bot,
+      sessionId: ctx.sessionId,
+    });
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[summarize] failed; continuing without summary', (err as Error).message);
+    return false;
   }
 }
 
@@ -32,19 +114,60 @@ export function registerChatHandlers(): void {
     const ac = new AbortController();
     activeStreams.set(req.msgId, ac);
 
+    // Per-bot session lifecycle: one session id per sendMessage (Phase 3
+    // tracer keeps this simple — multi-turn grouping is a follow-up).
+    const bot = 'default';
+    const sessionId = generateSessionId();
+    const sessionCtx: SessionContext = { bot, sessionId };
+
     let aggregated = '';
     let cancelled = false;
     let lastError: { error: string; retryable: boolean; category: 'auth' | 'network' | 'transient' | 'fatal' } | null = null;
 
     try {
-      // Persist the user turn immediately.
-      await appendMessage({ role: 'user', content: req.content, msgId: req.msgId });
+      // One-shot legacy migration on first launch.
+      await migrateLegacyGlobalJsonl(bot);
+
+      // Read existing session (or fall back to empty). This is what the
+      // summary block at the head of the JSONL looks like when summarization
+      // has run.
+      const existing = await loadSession(bot, sessionId);
+      const priorMessages: ChatMessage[] = existing.messages;
+
+      // Persist the user turn BEFORE the loop so the renderer reload on
+      // cancel still has the user's prompt on disk.
+      await appendMessage({ role: 'user', content: req.content, msgId: req.msgId }, sessionCtx);
+      broadcastHistoryAppended(bot, sessionId, req.msgId);
+
+      // Build the system prompt with a memory suffix.
+      const mem = await readMemory(bot);
+      const system = injectMemorySuffix(DEFAULT_SYSTEM_PROMPT, mem.markdown, mem.facts);
+
+      // Soft-cap summarization. Token usage is checked across the running
+      // session; summarization only kicks in once the bot has accumulated
+      // more than SOFT_CAP tokens worth of history.
+      const runningTotal = priorMessages.reduce((sum, m) => {
+        // We don't have token counts per row — emit the soft-cap check on
+        // message-count as a coarse proxy. The accumulator provides exact
+        // counts for future plans.
+        return sum + (typeof m.content === 'string' ? m.content.length : 0);
+      }, 0) / 4;
+      if (runningTotal > SOFT_CAP) {
+        await maybeSummarize(sessionCtx, priorMessages, ac.signal);
+      }
 
       const loopResult = await runAgenticLoop({
-        messages: [{ ts: Date.now(), role: 'user', content: req.content }],
-        system: DEFAULT_SYSTEM_PROMPT,
+        messages: [...priorMessages, { ts: Date.now(), role: 'user', content: req.content }],
+        system,
         tools: TOOL_SCHEMAS,
         signal: ac.signal,
+        bot,
+        onUsage: (event) => {
+          // Phase 3: accumulate per-message usage. We key by the SDK's
+          // message id when available; otherwise fall back to our msgId.
+          const sdkMsgId = (event as { message?: { id?: string } }).message?.id ?? req.msgId;
+          usageAccumulator.accumulate(sdkMsgId, event);
+        },
         onToken: (delta) => {
           aggregated += delta;
           broadcast(CHANNELS.EVENT_MESSAGE_TOKEN, { msgId: req.msgId, delta });
@@ -65,7 +188,6 @@ export function registerChatHandlers(): void {
             isError: r.isError,
           });
         },
-        bot: 'default',
       });
 
       // Persist the assistant turn on natural completion with full blocks.
@@ -75,7 +197,8 @@ export function registerChatHandlers(): void {
           content: aggregated,
           blocks: loopResult.blocks,
           msgId: req.msgId,
-        });
+        }, sessionCtx);
+        broadcastHistoryAppended(bot, sessionId, req.msgId);
       }
 
       broadcast(CHANNELS.EVENT_MESSAGE_DONE, { msgId: req.msgId });
@@ -89,10 +212,10 @@ export function registerChatHandlers(): void {
             content: aggregated,
             stopped: true,
             msgId: req.msgId,
-          });
+          }, sessionCtx);
+          broadcastHistoryAppended(bot, sessionId, req.msgId);
         }
         lastError = { error: 'cancelled', retryable: false, category: 'network' };
-        // If a tool call was in flight, send tools/cancel.
         const toolCallId = getActiveToolCallId();
         if (toolCallId) {
           await cancelToolCall(toolCallId);

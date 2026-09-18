@@ -4,6 +4,9 @@ import { app } from 'electron';
 import { createMainWindow } from './window';
 import { registerKeyHandlers } from './ipc/key';
 import { registerChatHandlers } from './ipc/chat';
+import { registerHistoryHandlers } from './ipc/history';
+import { registerMemoryHandlers } from './ipc/memory';
+import { registerTreeHandlers } from './ipc/tree';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs } from './paths';
 import { appendAuditLine } from './audit/logger';
@@ -42,6 +45,9 @@ void app.whenReady().then(async () => {
   // Register IPC handlers BEFORE creating the window so app:init payload resolves correctly.
   registerKeyHandlers();
   registerChatHandlers();
+  registerHistoryHandlers();
+  registerMemoryHandlers();
+  registerTreeHandlers();
 
   createMainWindow();
 

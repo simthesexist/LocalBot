@@ -31,6 +31,11 @@ export interface AgenticLoopOptions {
   onToolUse: (b: MessageBlock & { kind: 'tool_use' }) => void;
   onToolResult: (r: { toolUseId: string; content: string; isError: boolean }) => void;
   /**
+   * Phase 3: pass-through for usage-bearing stream events so chat.ts's
+   * usageAccumulator can track input_tokens / output_tokens across turns.
+   */
+  onUsage?: (event: Anthropic.Messages.MessageStreamEvent) => void;
+  /**
    * Optional callback fired when the loop encounters an unrecoverable error
    * (maxTurns exceeded, outer streamChat error). Errors are ALSO thrown so
    * the caller can decide how to react. chat.ts currently relies on the
@@ -183,6 +188,7 @@ export async function runAgenticLoop(opts: AgenticLoopOptions): Promise<AgenticL
         // pass through here (Pitfall 7).
         throw e;
       },
+      ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
     });
 
     turns++;

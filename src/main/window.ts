@@ -63,13 +63,14 @@ export function createMainWindow(): BrowserWindow {
 
   win.webContents.on('did-finish-load', async () => {
     try {
-      const [hasKey, messages] = await Promise.all([hasStoredKey(), loadSession()]);
+      const [hasKey, session] = await Promise.all([hasStoredKey(), loadSession('default')]);
       win.webContents.send(CHANNELS.EVENT_APP_INIT, {
         hasKey,
-        messages,
+        messages: session.messages,
+        headSummary: session.headSummary,
       });
     } catch (err) {
-      win.webContents.send(CHANNELS.EVENT_APP_INIT, { hasKey: false, messages: [] });
+      win.webContents.send(CHANNELS.EVENT_APP_INIT, { hasKey: false, messages: [], headSummary: null });
     }
   });
 

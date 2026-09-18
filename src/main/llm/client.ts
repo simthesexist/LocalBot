@@ -32,6 +32,12 @@ export interface StreamChatOptions {
   onToolUse: (b: MessageBlock & { kind: 'tool_use' }) => void;  // NEW
   onDone: () => void;
   onError: (e: Error) => void;
+  /**
+   * Phase 3: fired on every `message_start` + `message_delta` so main can
+   * accumulate input_tokens / output_tokens and decide whether to summarize.
+   * Optional — chat.ts wires this; older callers may omit it.
+   */
+  onUsage?: (event: Anthropic.Messages.MessageStreamEvent) => void;
 }
 
 export interface StreamChatResult {
@@ -43,10 +49,15 @@ export interface StreamChatResult {
 function toAnthropic(m: ChatMessage): Anthropic.Messages.MessageParam {
   // Phase 2 prefers `anthropicBlocks` (typed carrier) over the legacy
   // `content: string` row. Falls back to a text-only block.
+  // ChatMessage.role is `Role | 'summary'`, but the SDK only accepts
+  // `user | assistant`. Summary rows shouldn't reach here because the
+  // renderer's session loader filters them out before dispatch; cast as
+  // a backstop.
+  const role = (m.role === 'summary' ? 'user' : m.role) as 'user' | 'assistant';
   if (m.anthropicBlocks && m.anthropicBlocks.length > 0) {
-    return { role: m.role, content: m.anthropicBlocks as unknown as Anthropic.Messages.MessageParam['content'] };
+    return { role, content: m.anthropicBlocks as unknown as Anthropic.Messages.MessageParam['content'] };
   }
-  return { role: m.role, content: m.content };
+  return { role, content: m.content };
 }
 
 /**
@@ -90,6 +101,12 @@ export async function streamChat(opts: StreamChatOptions): Promise<StreamChatRes
         );
 
         for await (const event of stream as AsyncIterable<Anthropic.Messages.MessageStreamEvent>) {
+          // Phase 3: forward usage-bearing events to the optional onUsage
+          // callback so chat.ts's accumulator can track input_tokens and
+          // output_tokens across multi-turn runs.
+          if ((event.type === 'message_start' || event.type === 'message_delta') && opts.onUsage) {
+            try { opts.onUsage(event); } catch { /* never let onUsage take down the stream */ }
+          }
           if (event.type === 'content_block_start') {
             const cb = event.content_block;
             if (cb.type === 'tool_use') {

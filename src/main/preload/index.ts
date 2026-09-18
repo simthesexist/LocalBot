@@ -12,6 +12,11 @@ const EVENT_CHANNELS = new Set<string>([
   CHANNELS.EVENT_MESSAGE_TOOL_RESULT,
   CHANNELS.EVENT_DAEMON_STATUS,
   CHANNELS.EVENT_APP_INIT,
+  // Phase 3 channels:
+  CHANNELS.EVENT_TREE_REFRESH,
+  CHANNELS.EVENT_MEMORY_UPDATED,
+  CHANNELS.EVENT_HISTORY_LOADED,
+  CHANNELS.EVENT_HISTORY_APPENDED,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {
@@ -31,6 +36,16 @@ const api: LocalbotApi = {
     set: (key) => ipcRenderer.invoke(CHANNELS.KEY_SET, { key }),
     probe: (key) => ipcRenderer.invoke(CHANNELS.KEY_PROBE, { key }),
     clear: () => ipcRenderer.invoke(CHANNELS.KEY_CLEAR),
+  },
+  history: {
+    listSessions: (bot) => ipcRenderer.invoke(CHANNELS.HISTORY_LIST, { bot }),
+    load: (bot, sessionId) => ipcRenderer.invoke(CHANNELS.HISTORY_LOAD, { bot, sessionId }),
+  },
+  memory: {
+    read: (bot) => ipcRenderer.invoke(CHANNELS.MEMORY_READ, { bot }),
+  },
+  tree: {
+    list: (req) => ipcRenderer.invoke(CHANNELS.TREE_LIST, req),
   },
   on: ((channel: LocalbotChannel, handler: (payload: any) => void) => {
     return on(channel, handler);

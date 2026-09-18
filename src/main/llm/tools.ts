@@ -75,4 +75,20 @@ export const TOOL_SCHEMAS: Anthropic.Tool[] = [
       required: ['pattern'],
     },
   },
+  // Phase 3: bot-self memory tool. Called by the LLM when it wants to
+  // remember something for later (Pitfall 6). Kept consistent with the
+  // daemon's memory.update schema in registry.cjs.
+  {
+    name: 'memory.update',
+    description: "Append or replace a `## <section>` block in the bot's memory.md.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        section: { type: 'string', description: 'Heading text of the section (without the leading ## ).' },
+        body: { type: 'string', description: 'Markdown body for the section.' },
+        mode: { type: 'string', enum: ['append', 'replace'], description: 'How to merge the body (default: replace).' },
+      },
+      required: ['section', 'body'],
+    },
+  },
 ];

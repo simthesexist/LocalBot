@@ -7,13 +7,22 @@ import type {
   DaemonStatus,
   DoneEvent,
   ErrorEvent,
+  HistoryAppendedEvent,
+  HistoryLoadResult,
+  HistoryLoadedEvent,
   KeyClearResult,
   KeyGetResult,
   KeyProbeResult,
   KeySetResult,
+  MemoryReadResult,
+  MemoryUpdatedEvent,
+  SessionEntry,
   TokenEvent,
   ToolResultEvent,
   ToolUseEvent,
+  TreeListRequest,
+  TreeListResult,
+  TreeRefreshEvent,
 } from './types';
 
 export type LocalbotChannel =
@@ -23,7 +32,12 @@ export type LocalbotChannel =
   | 'message:tool_use'
   | 'message:tool_result'
   | 'daemon:status'
-  | 'app:init';
+  | 'app:init'
+  // Phase 3 channels:
+  | 'tree:refresh'
+  | 'memory:updated'
+  | 'history:loaded'
+  | 'history:appended';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -32,7 +46,11 @@ export type LocalbotEventPayload =
   | ToolUseEvent
   | ToolResultEvent
   | DaemonStatus
-  | AppInitPayload;
+  | AppInitPayload
+  | HistoryAppendedEvent
+  | HistoryLoadedEvent
+  | MemoryUpdatedEvent
+  | TreeRefreshEvent;
 
 export interface LocalbotApi {
   sendMessage: (content: string, msgId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -42,6 +60,16 @@ export interface LocalbotApi {
     set: (key: string) => Promise<KeySetResult>;
     probe: (key: string) => Promise<KeyProbeResult>;
     clear: () => Promise<KeyClearResult>;
+  };
+  history: {
+    listSessions: (bot: string) => Promise<{ ok: boolean; sessions?: SessionEntry[]; error?: string }>;
+    load: (bot: string, sessionId: string) => Promise<HistoryLoadResult>;
+  };
+  memory: {
+    read: (bot: string) => Promise<MemoryReadResult>;
+  };
+  tree: {
+    list: (req: TreeListRequest) => Promise<TreeListResult>;
   };
   on: (channel: LocalbotChannel, handler: (payload: LocalbotEventPayload) => void) => () => void;
 }

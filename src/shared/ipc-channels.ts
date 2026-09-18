@@ -9,6 +9,12 @@ export const CHANNELS = {
   KEY_PROBE: 'key:probe',
   KEY_CLEAR: 'key:clear',
 
+  // Phase 3: history + memory + tree.
+  HISTORY_LIST: 'history:listSessions',
+  HISTORY_LOAD: 'history:load',
+  MEMORY_READ: 'memory:read',
+  TREE_LIST: 'tree:list',
+
   // Main -> renderer (events)
   EVENT_MESSAGE_TOKEN: 'message:token',
   EVENT_MESSAGE_DONE: 'message:done',
@@ -17,6 +23,12 @@ export const CHANNELS = {
   EVENT_MESSAGE_TOOL_RESULT: 'message:tool_result', // Phase 2
   EVENT_DAEMON_STATUS: 'daemon:status',
   EVENT_APP_INIT: 'app:init',
+
+  // Phase 3: event channels.
+  EVENT_TREE_REFRESH: 'tree:refresh',
+  EVENT_MEMORY_UPDATED: 'memory:updated',
+  EVENT_HISTORY_LOADED: 'history:loaded',
+  EVENT_HISTORY_APPENDED: 'history:appended',
 
   // Lifecycle
   LIFECYCLE: 'lifecycle',

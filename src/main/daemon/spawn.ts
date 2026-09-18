@@ -130,6 +130,105 @@ export function getActiveToolCallId(): string | null {
   return activeToolCallId;
 }
 
+/**
+ * Phase 3: invoke the daemon's `memory/<method>` JSON-RPC method. The daemon
+ * exposes memory.read / memory.write as separate top-level methods that
+ * bypass the per-bot allowlist (registry.SYSTEM_TOOLS). Reuses the same
+ * NDJSON framing + pending map as callTool.
+ *
+ * `method` may be passed as either `memory/read` or `memory.read`; the slash
+ * form matches the daemon wire envelope, the dot form matches the registry
+ * tool name. Both are normalized to the wire form.
+ */
+export async function callMemory(
+  method: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  if (!initialized) throw new Error('daemon not initialized');
+  const wireMethod = method.replace(/^memory\./, 'memory/');
+  const id = nextId++;
+  const startedAt = Date.now();
+  const bot = (typeof args.bot === 'string' ? args.bot : 'default');
+  try {
+    const resp = await sendRequest({
+      jsonrpc: '2.0',
+      id,
+      method: wireMethod,
+      params: args,
+    });
+    const durationMs = Date.now() - startedAt;
+    const err = (resp as { error?: { code?: unknown; message?: unknown } }).error;
+    await appendAuditLine({
+      bot,
+      tool: wireMethod,
+      params: args,
+      outcome: err ? 'error' : 'ok',
+      durationMs,
+      error: err ? { code: String(err.code ?? 'unknown'), message: String(err.message ?? '') } : undefined,
+    });
+    return (resp as { result?: unknown }).result ?? resp;
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    await appendAuditLine({
+      bot,
+      tool: wireMethod,
+      params: args,
+      outcome: 'error',
+      durationMs,
+      error: { code: 'daemon_unreachable', message: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+/**
+ * Phase 3: invoke the daemon's `tree/<method>` JSON-RPC method. Same
+ * envelope rules as callMemory. The daemon exposes `tree/list` as a
+ * system-only JSON-RPC method that bypasses the bot allowlist.
+ */
+export async function callTree(
+  method: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  if (!initialized) throw new Error('daemon not initialized');
+  const wireMethod = method.replace(/^tree\./, 'tree/');
+  const id = nextId++;
+  const startedAt = Date.now();
+  const bot = (typeof (args as { bot?: string }).bot === 'string'
+    ? (args as { bot: string }).bot
+    : 'default');
+  try {
+    const resp = await sendRequest({
+      jsonrpc: '2.0',
+      id,
+      method: wireMethod,
+      params: args,
+    });
+    const durationMs = Date.now() - startedAt;
+    const err = (resp as { error?: { code?: unknown; message?: unknown } }).error;
+    await appendAuditLine({
+      bot,
+      tool: wireMethod,
+      params: args,
+      outcome: err ? 'error' : 'ok',
+      durationMs,
+      error: err ? { code: String(err.code ?? 'unknown'), message: String(err.message ?? '') } : undefined,
+    });
+    return (resp as { result?: unknown }).result ?? resp;
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    await appendAuditLine({
+      bot,
+      tool: wireMethod,
+      params: args,
+      outcome: 'error',
+      durationMs,
+      error: { code: 'daemon_unreachable', message: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
 function attachLineReader(proc: ChildProcess): void {
   if (!proc.stdout) return;
   const rl = readline.createInterface({ input: proc.stdout as NodeJS.ReadableStream });
@@ -247,8 +346,10 @@ export async function spawnDaemon(): Promise<void> {
   // safe_path can resolve paths against the bot workspace. Lazy-create the
   // workspace dir so the daemon's first tools/call finds it ready.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { ensureWorkspace } = require('../paths');
+  const { ensureWorkspace, ensureBotDir, botDir, userDataDir } = require('../paths');
   const workspaceRoot = await ensureWorkspace();
+  const initBot = 'default';
+  await ensureBotDir(initBot);
   const initId = nextId++;
   const initReq: JsonRpcRequest = {
     jsonrpc: '2.0',
@@ -256,10 +357,11 @@ export async function spawnDaemon(): Promise<void> {
     method: 'initialize',
     params: {
       client: 'localbot-main',
-      version: '0.2.0',
-      userDataDir: app.getPath('userData'),
-      bot: 'default',
+      version: '0.3.0',
+      userDataDir: userDataDir(),
+      bot: initBot,
       workspaceRoot,
+      botDir: botDir(initBot),
     },
   };
   try {

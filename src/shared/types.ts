@@ -4,22 +4,69 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 export type Role = 'user' | 'assistant';
 
-// Phase 2: discriminated union for renderer blocks. Legacy JSONL rows from
-// Phase 1 only carry `content: string`; the renderer falls back to wrapping
-// `content` as a single `{kind:'text'}` block when `blocks` is absent.
+// Phase 3: extended discriminated union. The renderer ignores unknown kinds
+// gracefully (MessageBlock falls back to a generic renderer) so adding a
+// new kind (like `summary`) does not break older builds.
 export type MessageBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
-  | { kind: 'tool_result'; toolUseId: string; content: string; isError: boolean };
+  | { kind: 'tool_result'; toolUseId: string; content: string; isError: boolean }
+  | { kind: 'summary'; summary: SummaryRecord };
+
+/**
+ * Phase 3: head-of-file summary record. Persisted as the first JSONL row of
+ * a session when the token soft-cap triggers summarization.
+ */
+export interface SummaryRecord {
+  summary: string;
+  turnsFolded: number;
+  ranAt: string;
+  msgId: string;
+}
+
+export interface FactsPayload {
+  value: unknown;
+  source: 'user' | 'tool' | 'summary';
+  updatedAt: string;
+}
+
+export type Facts = Record<string, FactsPayload>;
+
+export interface MemoryPayload {
+  markdown: string;
+  facts: Facts;
+  bytes: number;
+  factCount: number;
+  updatedAt: string;
+  parseError?: string;
+}
+
+export interface TreeNode {
+  name: string;
+  path: string;
+  type: 'file' | 'dir';
+  size?: number;
+  children?: TreeNode[] | null;
+  truncated?: boolean;
+}
+
+export interface SessionEntry {
+  sessionId: string;
+  startedAt: string;
+  messageCount: number;
+  isActive: boolean;
+}
 
 export interface ChatMessage {
   ts: number;
-  role: Role;
+  role: Role | 'summary';
   content: string;
   blocks?: MessageBlock[];        // NEW (Phase 2) — back-compat: legacy rows omit it
   stopped?: boolean;
   interrupted?: boolean;
   msgId?: string;
+  // Phase 3: head-of-file summary payload (mirrors `summary` row in JSONL).
+  summary?: SummaryRecord;
   // Typed carrier for Anthropic-shaped content blocks between streamChat
   // and runAgenticLoop. Used in Phase 2 to thread tool_use / tool_result
   // blocks across multi-turn resumes without `(m as any)` casts. Not
@@ -84,6 +131,8 @@ export interface KeyClearResult {
 
 export interface AppInitPayload {
   hasKey: boolean;
+  messages: ChatMessage[];
+  headSummary: SummaryRecord | null;
 }
 
 export interface DaemonStatus {
@@ -115,4 +164,71 @@ export interface JsonRpcResponse {
   id: number;
   result?: unknown;
   error?: { code: number | string; message: string };
+}
+
+// Phase 3: history + memory + tree IPC payloads.
+
+export interface HistoryListRequest {
+  bot: string;
+}
+
+export interface HistoryLoadRequest {
+  bot: string;
+  sessionId: string;
+}
+
+export interface HistoryLoadResult {
+  messages: ChatMessage[];
+  headSummary: SummaryRecord | null;
+}
+
+export interface MemoryReadRequest {
+  bot: string;
+}
+
+export interface MemoryReadResult {
+  markdown: string;
+  facts: Facts;
+  bytes: number;
+  factCount: number;
+  updatedAt: string;
+  parseError?: string;
+}
+
+export interface TreeListRequest {
+  path: string;
+  maxDepth?: number;
+  maxEntriesPerDir?: number;
+  exclude?: string[];
+}
+
+export interface TreeListResult {
+  entries: TreeNode[];
+  truncated: boolean;
+}
+
+export interface HistoryAppendedEvent {
+  kind: 'message' | 'summary';
+  bot: string;
+  sessionId: string;
+  msgId?: string;
+  summary?: SummaryRecord;
+}
+
+export interface TreeRefreshEvent {
+  bot: string;
+  rootPath: string;
+  changedPaths: string[];
+}
+
+export interface MemoryUpdatedEvent {
+  bot: string;
+  factCount: number;
+  bytes: number;
+  updatedAt: string;
+}
+
+export interface HistoryLoadedEvent {
+  bot: string;
+  sessionId: string;
 }
