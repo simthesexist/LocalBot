@@ -151,11 +151,13 @@ const SCHEMAS = {
   },
 };
 
-function getPolicy(_botId) {
-  // Phase 2: hardcoded default. Phase 4: load <userData>/bots/<botId>.json.
-  // For Phase 2 we always return the default policy — Phase 1 daemon has no
-  // per-bot file yet, and the orchestrator currently uses one bot ('default').
-  return DEFAULT_POLICY;
+// Phase 4: getPolicy delegates to bots/policy.cjs#getPolicy(botId, ctx) which
+// reads <userData>/bots/<botId>/config.json#allowlist on every call (no cache,
+// per T-P4-03 / RESEARCH.md Pitfall 1). Falls back to DEFAULT_POLICY for the
+// implicit `default` bot (Phase 3 back-compat) and for `_system` calls.
+const botPolicy = require('../bots/policy.cjs');
+function getPolicy(botId, ctx) {
+  return botPolicy.getPolicy(botId, ctx || {});
 }
 
 function listTools() {
@@ -223,7 +225,9 @@ function cancelToolCall(toolCallId) {
 
 async function callTool(botId, name, args, ctx) {
   // Line 1: denylist check (highest priority — overrides allowlist).
-  const policy = getPolicy(botId);
+  // Phase 4: thread ctx so the per-bot allowlist loader can read
+  // <userData>/bots/<bot>/config.json on every call (T-P4-03: no caching).
+  const policy = getPolicy(botId, ctx);
   if (policy.denylist.has(name)) {
     const e = new Error(`tool '${name}' denied by denylist`);
     e.code = 'denied';
