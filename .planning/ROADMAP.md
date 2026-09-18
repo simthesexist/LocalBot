@@ -95,7 +95,12 @@
   4. User can trigger a bot manually with a message, and cancel a running bot from the sidebar
   5. User can delete a bot (folder + all state) with a confirmation prompt, and view a per-bot run history table (timestamp, duration, exit reason, error)
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [x] `04-01-PLAN.md` — Tracer slice: daemon bots/loader.cjs + bots/policy.cjs + JSON-RPC bots/list|create|delete; src/main/ipc/bots.ts + spawn.callBot + paths/config; renderer BotSidebar + NewBotModal + DeleteConfirmModal + AppModal + state/bots.ts.
+- [x] `04-02-PLAN.md` — Trigger/cancel surface: daemon bots/update + bots/trigger + bots/cancel + RunRecord writes + audit; main runs/jsonl.ts + bots/runs.ts + bots/policy.ts + chat.ts req.bot routing + per-runId AbortController map; renderer SidebarComposer + SettingsEditModal + extended sidebar/row + state subscription.
+- [x] `04-03-PLAN.md` — Settings page + run history + Playwright smokes: BOTS_RUNS IPC + paginated listRuns + audit minimization; BotSettingsPage (4 tabs + URL hash sync) + RunHistoryTable + state/runs.ts + App view toggle; Playwright bot-crud + multi-bot tests + fake-m3 streamBotTrigger.
+
 **UI hint**: yes
 
 ### Phase 5: Shell Exec with Approval
@@ -186,9 +191,9 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Skeleton + Streaming Chat | 2/2 | Complete | 2026-09-17 |
-| 2. File Tools + Search + Tool System | 3/3 | In Progress|  |
-| 3. Memory + Conversation History | 0/0 | Not started | - |
-| 4. Multi-Bot CRUD + Sidebar | 0/0 | Not started | - |
+| 2. File Tools + Search + Tool System | 3/3 | Complete | 2026-09-18 |
+| 3. Memory + Conversation History | 3/3 | Complete | 2026-09-18 |
+| 4. Multi-Bot CRUD + Sidebar | 3/3 | Complete | 2026-09-18 |
 | 5. Shell Exec with Approval | 0/0 | Not started | - |
 | 6. Scheduler + Notifications | 0/0 | Not started | - |
 | 7. Obsidian Integration | 0/0 | Not started | - |
