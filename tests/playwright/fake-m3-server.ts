@@ -524,4 +524,150 @@ module.exports = {
   buildEditFileToolUseChunks,
   streamEditFileToolUse,
   streamBinaryEditFile,
+  // Phase 4 Wave 3 — bot trigger stream helper with abort signal support.
+  streamBotTrigger,
 };
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase 4 Wave 3: streamBotTrigger({bot, port, abortSignal})
+//
+// A standalone helper (no shared server) that listens on `port` and
+// answers every POST /v1/messages with a canned token stream. When
+// `abortSignal` fires, emits a final `{event:'cancelled'}` chunk and
+// closes the response so the SDK parses the cancellation cleanly.
+//
+// Used by bot-crud + multi-bot Playwright tests to drive Phase 4's
+// bots/trigger surface against the daemon without hitting the real API.
+// Logs every emitted chunk to stdout for test debugging (T-P4-30:
+// only {event, delta} — never the full prompt body).
+// ────────────────────────────────────────────────────────────────────────
+
+export interface StreamBotTriggerOpts {
+  bot: string;
+  port: number;
+  abortSignal: AbortSignal;
+  /** Per-token delay in ms (default 25). */
+  tokenDelayMs?: number;
+}
+
+export async function streamBotTrigger(opts: StreamBotTriggerOpts): Promise<{
+  url: string;
+  close: () => Promise<void>;
+  waitForRequest: () => Promise<{ promptText: string }>;
+}> {
+  const { bot, port, abortSignal, tokenDelayMs = 25 } = opts;
+  let resolveReq!: (v: { promptText: string }) => void;
+  const reqP = new Promise<{ promptText: string }>((res) => { resolveReq = res; });
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 bot trigger only handles /v1/messages' } }));
+      return;
+    }
+    let body = '';
+    req.on('data', (chunk) => { body += chunk.toString('utf8'); });
+    req.on('end', async () => {
+      // Extract the user's prompt text for the test (T-P4-30: only used
+      // for the waitForRequest helper, never persisted to audit/log).
+      let promptText = '';
+      try {
+        const parsed = body ? JSON.parse(body) : {};
+        promptText = Array.isArray(parsed?.messages) && parsed.messages.length > 0
+          ? parsed.messages[parsed.messages.length - 1]?.content ?? ''
+          : '';
+      } catch { /* ignore malformed bodies */ }
+
+      // Resolve the waitForRequest promise on the FIRST request only.
+      resolveReq({ promptText });
+
+      res.writeHead(200, SSE_HEADERS);
+
+      const tokenSeq = ['hello ', 'world ', `from bot ${bot}`, ' — STREAM_END'];
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'text', text: '' },
+        }),
+      ];
+      // eslint-disable-next-line no-console
+      console.log(`[fake-m3] bot=${bot} stream-start`);
+
+      let i = 0;
+      const tick = () => {
+        if (abortSignal.aborted) {
+          // Cancellation marker so the daemon's @anthropic-ai/sdk abort
+          // path emits the truncated cancellation message.
+          chunks.push(sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: ' [cancelled]' },
+          }));
+          chunks.push(
+            sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+            sseFrame('message_stop', { type: 'message_stop' }),
+          );
+          // eslint-disable-next-line no-console
+          console.log(`[fake-m3] bot=${bot} stream-cancelled after ${i} tokens`);
+          writeSse(res, chunks).catch(() => { /* ignore */ });
+          return;
+        }
+        if (i >= tokenSeq.length) {
+          chunks.push(
+            sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+            sseFrame('message_stop', { type: 'message_stop' }),
+          );
+          // eslint-disable-next-line no-console
+          console.log(`[fake-m3] bot=${bot} stream-end after ${i} tokens`);
+          writeSse(res, chunks).catch(() => { /* ignore */ });
+          return;
+        }
+        const tok = tokenSeq[i++];
+        chunks.push(sseFrame('content_block_delta', {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: tok },
+        }));
+        // eslint-disable-next-line no-console
+        console.log(`[fake-m3] bot=${bot} token: ${JSON.stringify(tok)}`);
+        setTimeout(tick, tokenDelayMs);
+      };
+      tick();
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBotTrigger listening on 127.0.0.1:${port} for bot=${bot}`);
+
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+    waitForRequest: () => reqP,
+  };
+}

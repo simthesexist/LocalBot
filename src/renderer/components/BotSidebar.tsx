@@ -1,13 +1,16 @@
-// BotSidebar — Phase 4 Wave 1+2 left rail.
+// BotSidebar — Phase 4 Wave 1+2+3 left rail.
 //
 // Replaces Phase 3's `WorkspaceTree` left rail (260 px). Renders one
 // `SidebarBotRow` per bot with a status dot, name, last-run text, and
 // delete button. Wave 2 adds:
 //   - `SidebarComposer` mounted at the bottom (Enter submits; disabled
 //     while the active bot's status === 'running').
-//   - `SettingsEditModal` opened from each row's settings icon
-//     (AGENT-04 settings edit surface — full settings page is Wave 3).
 //   - Play/stop actions in `SidebarBotRow` that call triggerBot / cancelBotRun.
+// Wave 3:
+//   - Settings icon now opens BotSettingsPage via onOpenSettings(botId)
+//     (the parent App routes the view toggle to the settings page).
+//   - SettingsEditModal is no longer mounted; the component is kept for
+//     reuse but BotSidebar no longer references it.
 
 import { useEffect, useState } from 'react';
 import { useBots, useActiveBotId, seedBots, triggerBot } from '../state/bots';
@@ -15,19 +18,19 @@ import type { BotConfig } from '../../shared/types';
 import { SidebarBotRow } from './SidebarBotRow';
 import { NewBotModal } from './NewBotModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { SettingsEditModal } from './SettingsEditModal';
 import { SidebarComposer } from './SidebarComposer';
 
 export interface BotSidebarProps {
   initialBots?: BotConfig[];
+  /** Phase 4 Wave 3: opens BotSettingsPage via the App-level view setter. */
+  onOpenSettings?: (botId: string) => void;
 }
 
-export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
+export function BotSidebar({ initialBots, onOpenSettings }: BotSidebarProps = {}) {
   const { bots, loading, error, activeBotId, setActiveBotId, refresh } = useBots();
   const { setActiveBotId: setActive } = useActiveBotId();
   const [showNewBotModal, setShowNewBotModal] = useState(false);
   const [confirmDeleteBot, setConfirmDeleteBot] = useState<BotConfig | null>(null);
-  const [settingsBot, setSettingsBot] = useState<BotConfig | null>(null);
 
   useEffect(() => {
     if (initialBots && initialBots.length > 0) {
@@ -82,7 +85,7 @@ export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
             isActive={bot.id === activeBotId}
             onSelect={() => onSelect(bot.id)}
             onDelete={() => setConfirmDeleteBot(bot)}
-            onSettings={() => setSettingsBot(bot)}
+            onSettings={() => onOpenSettings?.(bot.id)}
           />
         ))}
       </ul>
@@ -110,15 +113,6 @@ export function BotSidebar({ initialBots }: BotSidebarProps = {}) {
           onClose={() => setConfirmDeleteBot(null)}
           onDeleted={() => {
             if (activeBotId === confirmDeleteBot.id) setActive('default');
-            void refresh();
-          }}
-        />
-      )}
-      {settingsBot && (
-        <SettingsEditModal
-          bot={settingsBot}
-          onClose={() => setSettingsBot(null)}
-          onUpdated={() => {
             void refresh();
           }}
         />

@@ -17,9 +17,12 @@ export async function appendRunRecord(bot: string, record: RunRecord): Promise<{
   }
 }
 
-export async function listRunRecords(bot: string, limit?: number): Promise<RunRecord[]> {
+export async function listRunRecords(
+  bot: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<RunRecord[]> {
   try {
-    return await listRuns(bot, limit);
+    return await listRuns(bot, opts.limit, opts.offset);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(`[bots/runs] listRunRecords failed for bot=${bot}: ${(err as Error).message}`);

@@ -364,3 +364,17 @@ export interface RunRecord {
   error?: { code: string; message: string };
   messageCount: number;
 }
+
+// Phase 4 Wave 3: paginated run history read surface.
+export interface BotRunsRequest {
+  bot: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface BotRunsResult {
+  ok: boolean;
+  runs: RunRecord[];
+  hasMore: boolean;
+  error?: string;
+}

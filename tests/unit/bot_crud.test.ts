@@ -267,3 +267,203 @@ describe('bots/update — writeConfigPatch', () => {
     }
   });
 });
+
+// Phase 4 Wave 3: audit minimization (T-P4-22, T-P4-23, T-P4-24). Spawns
+// the daemon's bots/{update,trigger,cancel} handlers and asserts each
+// audit line carries ONLY the canonical non-PII fields (no persona
+// content, no error.message text, no patch contents).
+describe('bots/* audit minimization (T-P4-22/23)', () => {
+  function startDaemon(userDataDir: string): {
+    send: (method: string, params?: Record<string, unknown>) => Promise<any>;
+    stop: () => Promise<void>;
+  } {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { spawn } = require('node:child_process') as typeof import('node:child_process');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const readlineMod = require('node:readline') as typeof import('node:readline');
+    const daemonEntry = path.resolve(process.cwd(), 'daemon', 'main.cjs');
+    const child = spawn(process.execPath, [daemonEntry], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, LOCALBOT_USER_DATA_DIR: userDataDir },
+    });
+    const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+    const rl = readlineMod.createInterface({ input: child.stdout! });
+    let nextId = 1;
+    let ready = false;
+    const readyP = new Promise<void>((res) => {
+      const onLine = (line: string) => {
+        try {
+          const obj = JSON.parse(line);
+          if (obj && obj.kind === 'ready') {
+            ready = true;
+            rl.removeListener('line', onLine);
+            res();
+          }
+        } catch { /* ignore */ }
+      };
+      rl.on('line', onLine);
+    });
+    rl.on('line', (line: string) => {
+      try {
+        const obj = JSON.parse(line);
+        if (typeof obj.id === 'number' && pending.has(obj.id)) {
+          pending.get(obj.id)!.resolve(obj);
+          pending.delete(obj.id);
+        }
+      } catch { /* ignore */ }
+    });
+    function send(method: string, params?: Record<string, unknown>): Promise<any> {
+      const id = nextId++;
+      return new Promise((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        child.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+      });
+    }
+    return {
+      send,
+      async stop() {
+        try { child.kill(); } catch { /* ignore */ }
+      },
+      _ready: () => readyP,
+    } as any;
+  }
+
+  function readAuditLines(userDataDir: string): Array<Record<string, unknown>> {
+    const auditDir = path.join(userDataDir, 'audit');
+    if (!fs.existsSync(auditDir)) return [];
+    const files = fs.readdirSync(auditDir).filter((f) => f.endsWith('.jsonl'));
+    const out: Array<Record<string, unknown>> = [];
+    for (const f of files) {
+      const text = fs.readFileSync(path.join(auditDir, f), 'utf8');
+      for (const line of text.split('\n').filter(Boolean)) {
+        try { out.push(JSON.parse(line)); } catch { /* ignore */ }
+      }
+    }
+    return out;
+  }
+
+  it('bots/update audit params minimize to {changedKeys} only (no patch contents)', async () => {
+    const dir = mkTmp();
+    const daemon = startDaemon(dir);
+    await daemon._ready();
+    try {
+      await daemon.send('initialize', { userDataDir: dir });
+      await daemon.send('bots/create', {
+        name: 'audit-update-bot',
+        persona: 'secret persona that must not leak',
+        workspace: 'C:\\secret\\workspace',
+        allowlist: ['read_file'],
+      });
+      await daemon.send('bots/update', {
+        bot: 'audit-update-bot',
+        patch: { persona: 'updated persona', allowlist: ['read_file', 'write_file'] },
+      });
+      // Allow audit file flush.
+      await new Promise((r) => setTimeout(r, 100));
+      const lines = readAuditLines(dir).filter((l) => l.tool === 'bots.update');
+      const okLine = lines.find((l) => l.outcome === 'ok');
+      expect(okLine).toBeTruthy();
+      const params = okLine!.params as Record<string, unknown>;
+      expect(params.changedKeys).toEqual(['allowlist', 'persona']);
+      // Pitfall 10 minimization: no patch contents, no original config.
+      expect(params.persona).toBeUndefined();
+      expect(params.workspace).toBeUndefined();
+      expect(params.allowlist).toBeUndefined();
+      expect(params.patch).toBeUndefined();
+    } finally {
+      await daemon.stop();
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('bots/trigger audit params minimize to {runId, trigger, messageCount} only (no error.message text)', async () => {
+    const dir = mkTmp();
+    const daemon = startDaemon(dir);
+    await daemon._ready();
+    try {
+      await daemon.send('initialize', { userDataDir: dir });
+      // Trigger with a bot that doesn't exist — failure path audit line.
+      const resp = await daemon.send('bots/trigger', {
+        bot: 'missing-bot',
+        content: 'hello',
+        runId: 'test-runid',
+      });
+      // Allow audit file flush.
+      await new Promise((r) => setTimeout(r, 100));
+      // Either an error envelope (unknown_bot) was returned, OR an ok envelope
+      // was returned and the audit was written. Both are acceptable here;
+      // what matters is the audit minimization.
+      void resp;
+      const lines = readAuditLines(dir).filter((l) => l.tool === 'bots.run');
+      // At least one bots.run line should exist (success or error path).
+      expect(lines.length).toBeGreaterThan(0);
+      const line = lines[lines.length - 1];
+      const params = line.params as Record<string, unknown>;
+      // On the error path, params is {runId, trigger}; on success path,
+      // {runId, trigger, messageCount}. Both are minimal — no bot name,
+      // no content, no error.message text.
+      expect(typeof params.runId).toBe('string');
+      expect(params.trigger).toBe('manual');
+      expect(params.bot).toBeUndefined();
+      expect(params.content).toBeUndefined();
+      expect(params.error).toBeUndefined();
+      // On success, messageCount is present and a number.
+      if (line.outcome === 'ok') {
+        expect(typeof params.messageCount).toBe('number');
+      }
+    } finally {
+      await daemon.stop();
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('bots/cancel audit params minimize to {runId} only (no bot name)', async () => {
+    const dir = mkTmp();
+    const daemon = startDaemon(dir);
+    await daemon._ready();
+    try {
+      await daemon.send('initialize', { userDataDir: dir });
+      await daemon.send('bots/create', { name: 'audit-cancel-bot', allowlist: ['read_file'] });
+      // Cancel a non-existent runId — error path audit line.
+      await daemon.send('bots/cancel', { runId: 'no-such-run' });
+      await new Promise((r) => setTimeout(r, 100));
+      const lines = readAuditLines(dir).filter((l) => l.tool === 'bots.cancel');
+      expect(lines.length).toBeGreaterThan(0);
+      const line = lines[lines.length - 1];
+      const params = line.params as Record<string, unknown>;
+      // Even on error, params is just {runId: ''} — no bot context.
+      expect(Object.keys(params).sort()).toEqual(['runId']);
+    } finally {
+      await daemon.stop();
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('bots/create audit params minimize to {id, name} only (no personaBytes, no workspace, no allowlist)', async () => {
+    const dir = mkTmp();
+    const daemon = startDaemon(dir);
+    await daemon._ready();
+    try {
+      await daemon.send('initialize', { userDataDir: dir });
+      await daemon.send('bots/create', {
+        name: 'audit-create-bot',
+        persona: 'this must not appear in audit',
+        workspace: 'C:\\secret',
+        allowlist: ['read_file', 'write_file'],
+      });
+      await new Promise((r) => setTimeout(r, 100));
+      const lines = readAuditLines(dir).filter((l) => l.tool === 'bots.create' && l.outcome === 'ok');
+      expect(lines.length).toBe(1);
+      const params = lines[0].params as Record<string, unknown>;
+      expect(params.id).toBe('audit-create-bot');
+      expect(params.name).toBe('audit-create-bot');
+      expect(params.persona).toBeUndefined();
+      expect(params.personaBytes).toBeUndefined();
+      expect(params.workspace).toBeUndefined();
+      expect(params.allowlist).toBeUndefined();
+    } finally {
+      await daemon.stop();
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+});

@@ -12,6 +12,8 @@ import crypto from 'node:crypto';
 import { CHANNELS } from '../../shared/ipc-channels';
 import { callBot } from '../daemon/spawn';
 import { ensureRunsDir } from '../bots/paths';
+import { listRunRecords } from '../bots/runs';
+import { listBotsFromDisk } from '../bots/config';
 import type {
   BotCancelRequest,
   BotCancelResult,
@@ -21,6 +23,8 @@ import type {
   BotDeleteRequest,
   BotDeleteResult,
   BotListResult,
+  BotRunsRequest,
+  BotRunsResult,
   BotTriggerRequest,
   BotTriggerResult,
   BotUpdateRequest,
@@ -201,6 +205,34 @@ export function registerBotHandlers(): void {
       }
     }
     return { ok: true };
+  });
+
+  // Phase 4 Wave 3: paginated run history read. Validates the bot exists
+  // via listBotsFromDisk (cheap main-side read; matches listRunRecords's
+  // <runsDir>/<bot>.jsonl convention). hasMore is derived by requesting
+  // limit + 1 rows and trimming.
+  ipcMain.handle(CHANNELS.BOTS_RUNS, async (_evt, req: BotRunsRequest): Promise<BotRunsResult> => {
+    if (!req || typeof req.bot !== 'string' || req.bot.length === 0) {
+      return { ok: false, runs: [], hasMore: false, error: 'bot required' };
+    }
+    try {
+      const known = await listBotsFromDisk();
+      if (!known.some((b) => b.id === req.bot)) {
+        return { ok: false, runs: [], hasMore: false, error: 'unknown_bot' };
+      }
+      const limit = typeof req.limit === 'number' && req.limit > 0 ? Math.floor(req.limit) : 50;
+      const offset = typeof req.offset === 'number' && req.offset > 0 ? Math.floor(req.offset) : 0;
+      // Ask for one extra row so we can detect hasMore without a second read.
+      const rows = await listRunRecords(req.bot, { limit: limit + 1, offset });
+      const hasMore = rows.length > limit;
+      return {
+        ok: true,
+        runs: hasMore ? rows.slice(0, limit) : rows,
+        hasMore,
+      };
+    } catch (err) {
+      return { ok: false, runs: [], hasMore: false, error: (err as Error).message };
+    }
   });
 }
 

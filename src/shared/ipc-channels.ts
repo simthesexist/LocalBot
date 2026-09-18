@@ -25,6 +25,9 @@ export const CHANNELS = {
   BOTS_TRIGGER: 'bots:trigger',
   BOTS_CANCEL: 'bots:cancel',
 
+  // Phase 4 Wave 3: paginated run history read.
+  BOTS_RUNS: 'bots:runs',
+
   // Renderer -> main (one-way): ask main to re-send app:init so the renderer
   // can close the race window between `did-finish-load` (main fires the
   // initial send) and React's first `useEffect` (renderer registers the
