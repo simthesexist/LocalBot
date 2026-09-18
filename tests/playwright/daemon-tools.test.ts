@@ -554,3 +554,146 @@ test('memory round-trip + path containment + tree.list recursive/exclude', async
     // ignore
   }
 });
+
+test('audit log covers all 9 tool names + tree.refresh notification', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'localbot-daemon-audit-'));
+  const workspace = path.join(tmp, 'workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'hello.txt'), 'world\n', 'utf8');
+  fs.mkdirSync(path.join(workspace, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'src', 'a.ts'), 'export const planet = "planet"\n', 'utf8');
+
+  const daemonEntry = path.join(process.cwd(), 'daemon', 'main.cjs');
+  const child = spawn(process.execPath, [daemonEntry], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      LOCALBOT_USER_DATA_DIR: tmp,
+      LOCALBOT_WATCHER_POLLING: '1',
+    },
+  }) as ChildProcessByStdio<Writable, Readable, Readable>;
+
+  const stderrLines: string[] = [];
+  child.stderr?.on('data', (chunk) => stderrLines.push(chunk.toString('utf8')));
+
+  try {
+    const ready = await awaitReady(child);
+    expect(ready, 'daemon failed to emit {kind:"ready"} within 10s').toBe(true);
+
+    const rpc = createJsonRpcClient(child);
+    await rpc.send('initialize', {
+      client: 'localbot-audit-test',
+      version: '0.3.0',
+      userDataDir: tmp,
+      bot: 'default',
+      workspaceRoot: workspace,
+      treeRoots: [{ id: 'workspace', absPath: workspace }],
+    });
+
+    // Exercise every one of the 9 tools in order.
+    const toolCalls: Array<[string, Record<string, unknown>]> = [
+      ['read_file', { path: 'hello.txt' }],
+      ['write_file', { path: 'fresh.txt', content: 'fresh\n' }],
+      ['edit_file', { path: 'hello.txt', find: 'world', replace: 'planet' }],
+      ['list_dir', { path: '.' }],
+      ['code_search', { pattern: 'planet', path: '.' }],
+    ];
+    for (const [name, args] of toolCalls) {
+      const resp = await rpc.send('tools/call', {
+        name,
+        arguments: args,
+        toolCallId: `tc_audit_${name}`,
+        bot: 'default',
+      });
+      expect(resp.error, `tools/call ${name} failed: ${JSON.stringify(resp)}`).toBeUndefined();
+    }
+
+    // memory.write / memory.read.
+    await rpc.send('memory/write', {
+      bot: 'default',
+      markdown: '# Audit\n',
+      facts: { ready: { value: true, source: 'user', updatedAt: '2026-09-18T10:00:00Z' } },
+    });
+    await rpc.send('memory/read', { bot: 'default' });
+
+    // memory.update.
+    await rpc.send('tools/call', {
+      name: 'memory.update',
+      arguments: { bot: 'default', markdown: '# Audit\n', facts: {} },
+      toolCallId: 'tc_audit_memory.update',
+      bot_outer: 'default',
+      bot: 'default',
+    } as any);
+
+    // tree.list.
+    await rpc.send('tree/list', { path: '.', maxDepth: 2 });
+
+    // Touch a file to force the chokidar watcher to emit a tree.refresh.
+    fs.writeFileSync(path.join(workspace, 'trigger.txt'), 'go\n', 'utf8');
+
+    // Audit stream is async-write — give the daemon a moment to flush.
+    await new Promise((r) => setTimeout(r, 600));
+  } finally {
+    child.stdin.end();
+    await new Promise((r) => setTimeout(r, 100));
+    if (!child.killed) child.kill();
+  }
+
+  // Audit JSONL assertions: every one of the 9 tools must have a row.
+  const auditDir = path.join(tmp, 'audit');
+  const files = fs.existsSync(auditDir)
+    ? fs.readdirSync(auditDir).filter((f) => f.endsWith('.jsonl'))
+    : [];
+  expect(files.length).toBeGreaterThan(0);
+  const dateFile = files.find((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
+  expect(dateFile).toBeTruthy();
+  const lines = fs
+    .readFileSync(path.join(auditDir, dateFile!), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      try {
+        return JSON.parse(l);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  for (const tool of [
+    'read_file',
+    'write_file',
+    'edit_file',
+    'list_dir',
+    'code_search',
+    'memory.read',
+    'memory.write',
+    'memory.update',
+    'tree.list',
+  ]) {
+    const row = lines.find((l: any) => l.tool === tool);
+    expect(
+      row,
+      `expected an audit line for ${tool}\nGot:\n${JSON.stringify(lines, null, 2)}`,
+    ).toBeTruthy();
+  }
+
+  // The chokidar watcher must have emitted a tree.refresh audit row.
+  const refreshRow = lines.find(
+    (l: any) => l.tool === 'tree.refresh' && l.outcome === 'ok',
+  );
+  expect(
+    refreshRow,
+    `expected a tree.refresh audit row from the chokidar watcher\nGot:\n${JSON.stringify(lines, null, 2)}\nStderr:\n${stderrLines.join('')}`,
+  ).toBeTruthy();
+  expect(refreshRow.params?.rootPath).toBe(workspace);
+  expect(typeof refreshRow.params?.changedCount).toBe('number');
+  expect(refreshRow.params.changedCount).toBeGreaterThanOrEqual(1);
+
+  // Cleanup.
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+});
