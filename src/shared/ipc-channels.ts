@@ -15,6 +15,13 @@ export const CHANNELS = {
   MEMORY_READ: 'memory:read',
   TREE_LIST: 'tree:list',
 
+  // Renderer -> main (one-way): ask main to re-send app:init so the renderer
+  // can close the race window between `did-finish-load` (main fires the
+  // initial send) and React's first `useEffect` (renderer registers the
+  // listener). The handler in src/main/window.ts re-fires EVENT_APP_INIT to
+  // the requesting webContents.
+  REQUEST_APP_INIT: 'app:init:request',
+
   // Main -> renderer (events)
   EVENT_MESSAGE_TOKEN: 'message:token',
   EVENT_MESSAGE_DONE: 'message:done',

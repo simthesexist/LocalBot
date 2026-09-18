@@ -1,12 +1,29 @@
 // BrowserWindow factory.
 
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditLine } from './audit/logger';
 import { CHANNELS } from '../shared/ipc-channels';
 import { hasStoredKey } from './ipc/key';
 import { loadSession } from './sessions/jsonl';
+
+// Per-window app:init trigger so the renderer can ASK main to re-send the
+// payload after its React useEffect has registered the listener. This
+// closes the race window between Electron's `did-finish-load` (which fires
+// the initial send) and the renderer's first effect commit. Without this,
+// the listener can be registered after the event was already sent, leaving
+// `hasKey` stuck at `null` and the renderer permanently on "Loading…".
+const appInitTriggers = new Map<number, () => Promise<void>>();
+
+// Registered exactly once at module load — createMainWindow can be called
+// multiple times (e.g. macOS app reactivation), but the IPC channel only
+// needs one handler. The handler looks up the per-window trigger by the
+// sender's webContents.id.
+ipcMain.on(CHANNELS.REQUEST_APP_INIT, (evt) => {
+  const trigger = appInitTriggers.get(evt.sender.id);
+  if (trigger) void trigger();
+});
 
 export type RendererTarget =
   | { kind: 'built'; path: string }
@@ -50,7 +67,13 @@ export function createMainWindow(): BrowserWindow {
     icon: path.join(app.getAppPath(), 'resources', 'icon.svg'),
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      // window.js lives in dist/main/, so the preload sits next to it in
+      // dist/main/preload/index.js — NOT dist/preload/index.js (which
+      // would be one level too high and would silently fail to load,
+      // leaving the renderer without window.localbot and stuck on
+      // "Loading…"). This was the original app:init race root cause —
+      // without a working preload bridge, EVENT_APP_INIT had no listener.
+      preload: path.join(__dirname, 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -61,7 +84,12 @@ export function createMainWindow(): BrowserWindow {
     win.show();
   });
 
-  win.webContents.on('did-finish-load', async () => {
+  // Build the app:init payload once and reuse the same closure if the
+  // renderer requests a re-send via REQUEST_APP_INIT (see module-level
+  // handler above). The `did-finish-load` send is kept as the primary path;
+  // the pull-request path is a backstop for the case where React's
+  // useEffect registers the listener after main already sent.
+  const sendAppInit = async () => {
     try {
       const [hasKey, session] = await Promise.all([hasStoredKey(), loadSession('default')]);
       win.webContents.send(CHANNELS.EVENT_APP_INIT, {
@@ -72,6 +100,11 @@ export function createMainWindow(): BrowserWindow {
     } catch (err) {
       win.webContents.send(CHANNELS.EVENT_APP_INIT, { hasKey: false, messages: [], headSummary: null });
     }
+  };
+  appInitTriggers.set(win.webContents.id, sendAppInit);
+
+  win.webContents.on('did-finish-load', () => {
+    void sendAppInit();
   });
 
   win.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {

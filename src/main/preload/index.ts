@@ -47,6 +47,10 @@ const api: LocalbotApi = {
   tree: {
     list: (req) => ipcRenderer.invoke(CHANNELS.TREE_LIST, req),
   },
+  // One-way: renderer asks main to re-send EVENT_APP_INIT. Used in App.tsx
+  // after the app:init listener is registered to close the
+  // did-finish-load vs React useEffect race window.
+  requestAppInit: () => ipcRenderer.send(CHANNELS.REQUEST_APP_INIT),
   on: ((channel: LocalbotChannel, handler: (payload: any) => void) => {
     return on(channel, handler);
   }) as LocalbotApi['on'],

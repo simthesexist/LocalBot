@@ -71,6 +71,13 @@ export interface LocalbotApi {
   tree: {
     list: (req: TreeListRequest) => Promise<TreeListResult>;
   };
+  /**
+   * One-way: ask the main process to re-send `app:init`. The renderer calls
+   * this immediately after registering its `app:init` listener so that the
+   * race between `did-finish-load` (main fires the initial send) and the
+   * React `useEffect` that registers the listener cannot drop the event.
+   */
+  requestAppInit: () => void;
   on: (channel: LocalbotChannel, handler: (payload: LocalbotEventPayload) => void) => () => void;
 }
 
