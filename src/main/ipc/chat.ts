@@ -11,6 +11,10 @@
 //   - When the running total crosses SOFT_CAP, maybeSummarize runs a
 //     dedicated turn against the M3 API, prepends the summary row to the
 //     JSONL, and broadcasts EVENT_HISTORY_APPENDED.
+//
+// Phase 4 Wave 2: routes by `req.bot` (replacing the hardcoded 'default')
+// and rebuilds the system prompt with both persona + memory suffixes per
+// turn via loadConfigIntoSystemPrompt.
 
 import { ipcMain, BrowserWindow } from 'electron';
 import { CHANNELS } from '../../shared/ipc-channels';
@@ -30,7 +34,8 @@ import { runSummarizer } from '../llm/summarize';
 import { classifyError } from '../errors';
 import { cancelToolCall, getActiveToolCallId } from '../daemon/spawn';
 import { TOOL_SCHEMAS } from '../llm/tools';
-import { DEFAULT_SYSTEM_PROMPT } from '../llm/prompts';
+import { DEFAULT_SYSTEM_PROMPT_BASE } from '../llm/prompts';
+import { loadConfigIntoSystemPrompt } from '../bots/policy';
 import type { SendMessageRequest, ChatMessage } from '../../shared/types';
 
 const activeStreams = new Map<string, AbortController>();
@@ -146,9 +151,8 @@ export function registerChatHandlers(): void {
     const ac = new AbortController();
     activeStreams.set(req.msgId, ac);
 
-    // Per-bot session lifecycle: one session id per sendMessage (Phase 3
-    // tracer keeps this simple — multi-turn grouping is a follow-up).
-    const bot = 'default';
+    // Phase 4 Wave 2: route by req.bot (defaults to 'default' for Phase 3 back-compat).
+    const bot = (typeof req.bot === 'string' && req.bot.length > 0) ? req.bot : 'default';
     const sessionId = generateSessionId();
     const sessionCtx: SessionContext = { bot, sessionId };
 
@@ -171,9 +175,17 @@ export function registerChatHandlers(): void {
       await appendMessage({ role: 'user', content: req.content, msgId: req.msgId }, sessionCtx);
       broadcastHistoryAppended(bot, sessionId, req.msgId);
 
-      // Build the system prompt with a memory suffix.
+      // Build the system prompt with persona + memory suffixes.
+      let personaSystem = DEFAULT_SYSTEM_PROMPT_BASE;
+      try {
+        const loaded = await loadConfigIntoSystemPrompt(bot);
+        personaSystem = loaded.system;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[chat] loadConfigIntoSystemPrompt failed for bot=${bot}: ${(err as Error).message}`);
+      }
       const mem = await readMemory(bot);
-      const system = injectMemorySuffix(DEFAULT_SYSTEM_PROMPT, mem.markdown, mem.facts);
+      const system = injectMemorySuffix(personaSystem, mem.markdown, mem.facts);
 
       // Soft-cap summarization. Token usage is checked across the running
       // session; summarization only kicks in once the bot has accumulated

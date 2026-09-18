@@ -1,23 +1,30 @@
-// Phase 4 Wave 1: bot metadata IPC handlers.
+// Phase 4 Wave 1+2: bot metadata IPC handlers.
 //
-// Wires the BOTS_LIST / BOTS_CREATE / BOTS_DELETE invoke channels to the
-// daemon's `bots/list` / `bots/create` / `bots/delete` JSON-RPC methods.
+// Wires BOTS_LIST / BOTS_CREATE / BOTS_DELETE / BOTS_UPDATE / BOTS_TRIGGER /
+// BOTS_CANCEL invoke channels to the daemon's matching JSON-RPC methods.
 // On any successful mutation we broadcast EVENT_BOT_LIST_UPDATED so the
-// sidebar can refresh without polling. The renderer's initial paint reads
-// the canonical bot list from `app:init.bots` (window.ts) so it hydrates
-// synchronously without an extra IPC roundtrip.
+// sidebar can refresh without polling. BOTS_TRIGGER manages a per-runId
+// AbortController map (Pitfall 10) and broadcasts EVENT_BOT_STATUS on every
+// transition.
 
 import { ipcMain, BrowserWindow } from 'electron';
+import crypto from 'node:crypto';
 import { CHANNELS } from '../../shared/ipc-channels';
 import { callBot } from '../daemon/spawn';
 import { ensureRunsDir } from '../bots/paths';
 import type {
+  BotCancelRequest,
+  BotCancelResult,
   BotConfig,
   BotCreateRequest,
   BotCreateResult,
   BotDeleteRequest,
   BotDeleteResult,
   BotListResult,
+  BotTriggerRequest,
+  BotTriggerResult,
+  BotUpdateRequest,
+  BotUpdateResult,
 } from '../../shared/types';
 
 function broadcast(channel: string, payload: unknown): void {
@@ -27,6 +34,12 @@ function broadcast(channel: string, payload: unknown): void {
     }
   }
 }
+
+// Per-runId AbortController map (Pitfall 10 — multi-bot cancel races).
+const activeRuns = new Map<string, AbortController>();
+// msgId → runId so the chat composer can correlate msgId cancels back to
+// the per-runId controller (Wave 2 wires msgId = runId-m1).
+const activeMsgToRun = new Map<string, string>();
 
 export function registerBotHandlers(): void {
   ipcMain.handle(CHANNELS.BOTS_LIST, async (): Promise<BotListResult> => {
@@ -38,7 +51,6 @@ export function registerBotHandlers(): void {
         error: result?.error,
       };
     } catch (err) {
-      // Defensive default — never throw to the renderer (Pitfall 5).
       return { ok: false, bots: [], error: (err as Error).message };
     }
   });
@@ -62,9 +74,6 @@ export function registerBotHandlers(): void {
       if (typeof req.cronEnabled === 'boolean') args.cronEnabled = req.cronEnabled;
       const result = (await callBot('bots/create', args)) as { ok?: boolean; bot?: BotConfig; error?: string };
 
-      // Best-effort: pre-create the runs dir so Wave 2's run trigger can
-      // append without an extra mkdir roundtrip. Failure here is
-      // non-fatal — runs writer can mkdirSync lazily.
       if (result?.ok && result.bot) {
         void ensureRunsDir(result.bot.id).catch(() => { /* ignore */ });
       }
@@ -99,4 +108,115 @@ export function registerBotHandlers(): void {
       return { ok: false, error: (err as Error).message };
     }
   });
+
+  ipcMain.handle(CHANNELS.BOTS_UPDATE, async (_evt, req: BotUpdateRequest): Promise<BotUpdateResult> => {
+    if (!req || typeof req.bot !== 'string' || req.bot.length === 0) {
+      return { ok: false, error: 'bot required' };
+    }
+    if (!req.patch || typeof req.patch !== 'object' || Array.isArray(req.patch)) {
+      return { ok: false, error: 'patch must be an object' };
+    }
+    try {
+      const result = (await callBot('bots/update', { bot: req.bot, patch: req.patch })) as {
+        ok?: boolean; bot?: BotConfig; error?: string;
+      };
+      if (result?.ok) {
+        broadcast(CHANNELS.EVENT_BOT_LIST_UPDATED, { reason: 'update', bot: req.bot });
+      }
+      return {
+        ok: result?.ok === true,
+        bot: result?.bot,
+        error: result?.error,
+      };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(CHANNELS.BOTS_TRIGGER, async (_evt, req: BotTriggerRequest): Promise<BotTriggerResult> => {
+    if (!req || typeof req.bot !== 'string' || req.bot.length === 0) {
+      return { ok: false, error: 'bot required' };
+    }
+    if (typeof req.content !== 'string' || req.content.trim().length === 0) {
+      return { ok: false, error: 'content required' };
+    }
+    const runId = crypto.randomUUID();
+    const controller = new AbortController();
+    activeRuns.set(runId, controller);
+
+    // Pitfall 9 — broadcast running status immediately.
+    broadcast(CHANNELS.EVENT_BOT_STATUS, {
+      bot: req.bot,
+      status: 'running',
+      runId,
+      ts: new Date().toISOString(),
+    });
+
+    try {
+      const result = (await callBot('bots/trigger', { bot: req.bot, content: req.content, runId })) as {
+        ok?: boolean; runId?: string; exitReason?: 'completed' | 'cancelled' | 'errored'; error?: string;
+      };
+      const exitReason = result?.exitReason ?? 'completed';
+      broadcast(CHANNELS.EVENT_BOT_STATUS, {
+        bot: req.bot,
+        status: exitReason === 'errored' ? 'errored' : 'idle',
+        runId,
+        ts: new Date().toISOString(),
+      });
+      return {
+        ok: result?.ok === true,
+        runId: result?.runId ?? runId,
+        exitReason,
+        error: result?.error,
+      };
+    } catch (err) {
+      broadcast(CHANNELS.EVENT_BOT_STATUS, {
+        bot: req.bot,
+        status: 'errored',
+        runId,
+        ts: new Date().toISOString(),
+      });
+      return { ok: false, runId, error: (err as Error).message };
+    } finally {
+      activeRuns.delete(runId);
+      // Best-effort cleanup of any msgId mappings for this runId.
+      for (const [msgId, mappedRunId] of Array.from(activeMsgToRun.entries())) {
+        if (mappedRunId === runId) activeMsgToRun.delete(msgId);
+      }
+    }
+  });
+
+  ipcMain.handle(CHANNELS.BOTS_CANCEL, async (_evt, req: BotCancelRequest): Promise<BotCancelResult> => {
+    if (!req || typeof req.runId !== 'string' || req.runId.length === 0) {
+      return { ok: false, error: 'runId required' };
+    }
+    const ctrl = activeRuns.get(req.runId);
+    if (ctrl) {
+      try { ctrl.abort(); } catch { /* ignore */ }
+    }
+    // Also abort any msgId controllers mapped to this runId (Pitfall 10).
+    for (const [msgId, mappedRunId] of Array.from(activeMsgToRun.entries())) {
+      if (mappedRunId === req.runId) {
+        activeMsgToRun.delete(msgId);
+      }
+    }
+    return { ok: true };
+  });
+}
+
+/**
+ * Look up + register the AbortController for a chat composer msgId so
+ * bots/cancel can also abort any in-flight chat sendMessage cycle.
+ * Wave 2 wires the chat composer's msgId to the per-runId map.
+ */
+export function registerMsgForRun(msgId: string, runId: string): void {
+  activeMsgToRun.set(msgId, runId);
+}
+
+export function unregisterMsgForRun(msgId: string): void {
+  activeMsgToRun.delete(msgId);
+}
+
+export function getAbortControllerForRun(runId: string): AbortController | undefined {
+  return activeRuns.get(runId);
 }

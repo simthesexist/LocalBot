@@ -182,5 +182,78 @@ describe('registry.cancelToolCall', () => {
   });
 });
 
+describe('per-bot allowlist override', () => {
+  it('tool allowed for bot A but denied for bot B with the narrow allowlist', async () => {
+    const tmp = require('node:os').tmpdir();
+    const ws = fs.mkdtempSync(path.join(tmp, 'localbot-perbot-'));
+    try {
+      fs.writeFileSync(path.join(ws, 'a.txt'), 'ok', 'utf8');
+      // bot-a allows only read_file
+      const loader = require_('../../daemon/bots/loader.cjs') as {
+        writeConfig: (dir: string, bot: string, cfg: Record<string, unknown>) => unknown;
+      };
+      loader.writeConfig(ws, 'bot-a', {
+        id: 'bot-a',
+        name: 'A',
+        schemaVersion: 1,
+        allowlist: ['read_file'],
+      });
+      // bot-b allows both read + write
+      loader.writeConfig(ws, 'bot-b', {
+        id: 'bot-b',
+        name: 'B',
+        schemaVersion: 1,
+        allowlist: ['read_file', 'write_file'],
+      });
+
+      // bot-a: write_file should be denied.
+      await expect(
+        registry.callTool('bot-a', 'write_file', { path: 'a.txt', content: 'x' }, { workspaceRoot: ws }),
+      ).rejects.toMatchObject({ code: 'denied', reason: 'allowlist' });
+
+      // bot-b: write_file should be allowed (filesystem write succeeds).
+      const res = await registry.callTool(
+        'bot-b', 'write_file', { path: 'a.txt', content: 'ok' }, { workspaceRoot: ws },
+      );
+      expect(res).toBeTruthy();
+      expect(fs.readFileSync(path.join(ws, 'a.txt'), 'utf8')).toBe('ok');
+    } finally {
+      try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('bots/update narrows the allowlist and the next tools/call reflects it', async () => {
+    const tmp = require('node:os').tmpdir();
+    const ws = fs.mkdtempSync(path.join(tmp, 'localbot-update-allow-'));
+    try {
+      fs.writeFileSync(path.join(ws, 'a.txt'), 'ok', 'utf8');
+      const loader = require_('../../daemon/bots/loader.cjs') as {
+        writeConfig: (dir: string, bot: string, cfg: Record<string, unknown>) => unknown;
+        writeConfigPatch: (dir: string, bot: string, patch: Record<string, unknown>) => unknown;
+      };
+      loader.writeConfig(ws, 'narrow', {
+        id: 'narrow',
+        name: 'Narrow',
+        schemaVersion: 1,
+        allowlist: ['read_file', 'write_file'],
+      });
+      // Before update: write_file is allowed.
+      await expect(
+        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'y' }, { workspaceRoot: ws }),
+      ).resolves.toBeTruthy();
+
+      // Narrow the allowlist.
+      loader.writeConfigPatch(ws, 'narrow', { allowlist: ['read_file'] });
+
+      // After update: write_file is denied.
+      await expect(
+        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'z' }, { workspaceRoot: ws }),
+      ).rejects.toMatchObject({ code: 'denied', reason: 'allowlist' });
+    } finally {
+      try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+});
+
 // Reference the memory_read import so vitest doesn't fail on unused-import.
 void memoryRead;

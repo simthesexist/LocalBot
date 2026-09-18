@@ -54,6 +54,10 @@ const api: LocalbotApi = {
     list: () => ipcRenderer.invoke(CHANNELS.BOTS_LIST),
     create: (req) => ipcRenderer.invoke(CHANNELS.BOTS_CREATE, req),
     delete: (req) => ipcRenderer.invoke(CHANNELS.BOTS_DELETE, req),
+    // Phase 4 Wave 2: settings edit, manual trigger, cancel.
+    update: (req) => ipcRenderer.invoke(CHANNELS.BOTS_UPDATE, req),
+    trigger: (req) => ipcRenderer.invoke(CHANNELS.BOTS_TRIGGER, req),
+    cancel: (req) => ipcRenderer.invoke(CHANNELS.BOTS_CANCEL, req),
   },
   // One-way: renderer asks main to re-send EVENT_APP_INIT. Used in App.tsx
   // after the app:init listener is registered to close the

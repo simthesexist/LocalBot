@@ -77,6 +77,8 @@ export interface ChatMessage {
 export interface SendMessageRequest {
   content: string;
   msgId: string;
+  /** Phase 4 Wave 2: per-bot routing. Defaults to 'default' for Phase 3 back-compat. */
+  bot?: string;
 }
 
 export interface TokenEvent {
@@ -317,4 +319,48 @@ export interface BotStatusEvent {
   bot: string;
   status: BotStatus;
   runId?: string;
+  ts?: string;
+}
+
+// Phase 4 Wave 2: settings edit, manual trigger, cancel, run history.
+export interface BotUpdateRequest {
+  bot: string;
+  patch: Partial<Omit<BotConfig, 'id' | 'createdAt'>>;
+}
+
+export interface BotUpdateResult {
+  ok: boolean;
+  bot?: BotConfig;
+  error?: string;
+}
+
+export interface BotTriggerRequest {
+  bot: string;
+  content: string;
+}
+
+export interface BotTriggerResult {
+  ok: boolean;
+  runId?: string;
+  exitReason?: 'completed' | 'cancelled' | 'errored';
+  error?: string;
+}
+
+export interface BotCancelRequest {
+  runId: string;
+}
+
+export interface BotCancelResult {
+  ok: boolean;
+  error?: string;
+}
+
+export interface RunRecord {
+  ts: string;
+  runId: string;
+  trigger: 'manual';
+  durationMs: number;
+  exitReason: 'completed' | 'cancelled' | 'errored';
+  error?: { code: string; message: string };
+  messageCount: number;
 }

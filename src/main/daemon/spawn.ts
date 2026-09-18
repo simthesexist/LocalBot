@@ -309,7 +309,7 @@ function dispatchLine(line: string): void {
  * `{ok:false, error}` in the renderer without a translate step.
  */
 export async function callBot(
-  method: 'bots/list' | 'bots/create' | 'bots/delete',
+  method: 'bots/list' | 'bots/create' | 'bots/delete' | 'bots/update' | 'bots/trigger' | 'bots/cancel',
   args: Record<string, unknown>,
 ): Promise<unknown> {
   if (!initialized) throw new Error('daemon not initialized');

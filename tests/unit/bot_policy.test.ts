@@ -20,6 +20,7 @@ const defaultPolicy = require_('../../daemon/bots/default.cjs') as {
 };
 const loader = require_('../../daemon/bots/loader.cjs') as {
   writeConfig: (userDataDir: string, bot: string, cfg: Record<string, unknown>) => unknown;
+  writeConfigPatch: (userDataDir: string, bot: string, patch: Record<string, unknown>) => unknown;
 };
 
 function mkTmp(): string {
@@ -147,5 +148,54 @@ describe('makePolicyFromConfig', () => {
     expect(out.allowlist.has('b')).toBe(true);
     expect(out.allowlist.has('c')).toBe(true);
     expect(out.allowlist.size).toBe(3);
+  });
+});
+
+describe('getPolicy reflects bots/update allowlist changes immediately (Pitfall 1)', () => {
+  it('reads the UPDATED config after bots/update reloads the allowlist', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'reload-bot', {
+        id: 'reload-bot',
+        name: 'Reload Bot',
+        schemaVersion: 1,
+        allowlist: ['read_file'],
+      });
+      const before = policy.getPolicy('reload-bot', { userDataDir: dir });
+      expect(before.allowlist.has('read_file')).toBe(true);
+      expect(before.allowlist.has('write_file')).toBe(false);
+
+      // Simulate bots/update via writeConfigPatch.
+      loader.writeConfigPatch(dir, 'reload-bot', { allowlist: ['read_file', 'write_file'] });
+
+      const after = policy.getPolicy('reload-bot', { userDataDir: dir });
+      // T-P4-18 / Pitfall 1: a freshly-read policy must reflect the update.
+      expect(after.allowlist.has('read_file')).toBe(true);
+      expect(after.allowlist.has('write_file')).toBe(true);
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('removes a tool from the allowlist after bots/update narrows it', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'narrow-bot', {
+        id: 'narrow-bot',
+        name: 'Narrow Bot',
+        schemaVersion: 1,
+        allowlist: ['read_file', 'write_file'],
+      });
+      const before = policy.getPolicy('narrow-bot', { userDataDir: dir });
+      expect(before.allowlist.has('write_file')).toBe(true);
+
+      loader.writeConfigPatch(dir, 'narrow-bot', { allowlist: ['read_file'] });
+
+      const after = policy.getPolicy('narrow-bot', { userDataDir: dir });
+      expect(after.allowlist.has('write_file')).toBe(false);
+      expect(after.allowlist.has('read_file')).toBe(true);
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
   });
 });
