@@ -1,8 +1,10 @@
-// Chat pane. Phase 3 Wave 2.
+// Chat pane. Phase 4 Wave 1.
 //
 // Mounts the MemoryPill + SessionSwitcher in the header, renders the
-// head-of-file SummaryBlock at the top of the message list, and binds
-// the WorkspaceTree to the chokidar `tree:refresh` event via useWorkspaceTree.
+// head-of-file SummaryBlock at the top of the message list. Phase 4
+// swaps the left rail from Phase 3's WorkspaceTree to the new
+// BotSidebar (260 px); WorkspaceTree is re-homed to the BotSettingsPage
+// in Wave 3.
 
 import { useEffect, useRef } from 'react';
 import { Composer } from './Composer';
@@ -10,15 +12,17 @@ import { MessageBubble } from './MessageBubble';
 import { MessageBlock } from './MessageBlock';
 import { ErrorBanner } from './ErrorBanner';
 import { MemoryPill } from './MemoryPill';
-import { WorkspaceTree } from './WorkspaceTree';
+import { BotSidebar } from './BotSidebar';
 import { SessionSwitcher } from './SessionSwitcher';
 import { SummaryBlock } from './SummaryBlock';
 import { useMessages } from '../state/messages';
 import { useCurrentSession } from '../state/sessions';
 import type { ChatMessage, MessageBlock as MessageBlockT } from '../../shared/types';
+import type { BotConfig } from '../../shared/types';
 
 export interface ChatProps {
   initialMessages: ChatMessage[];
+  initialBots?: BotConfig[];
   workspaceRoot?: string;
 }
 
@@ -28,7 +32,7 @@ function blocksForMessage(m: ChatMessage): MessageBlockT[] {
   return [{ kind: 'text', text: m.content ?? '' }];
 }
 
-export function Chat({ initialMessages, workspaceRoot = '.' }: ChatProps) {
+export function Chat({ initialMessages, initialBots, workspaceRoot = '.' }: ChatProps) {
   const {
     messages,
     streaming,
@@ -101,7 +105,7 @@ export function Chat({ initialMessages, workspaceRoot = '.' }: ChatProps) {
       </header>
 
       <div className="chat-body">
-        <WorkspaceTree workspaceRoot={workspaceRoot} />
+        <BotSidebar initialBots={initialBots} />
         {daemonStatus.state !== 'ready' && (
           <ErrorBanner
             variant="daemon"
