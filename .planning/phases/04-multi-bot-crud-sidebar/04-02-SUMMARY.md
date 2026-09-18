@@ -57,13 +57,13 @@ metrics:
   duration: ~35 min
   completed_date: 2026-09-18
   tasks: 3
-  commits: 4
+  commits: 5
 status: complete
 plan_head_before: f9458d1
 actuals:
   tokens: 74000
   tasks: 3
-  commits: 4
+  commits: 5
 ---
 
 # Phase 4 Plan 2: Trigger / Cancel / Run history / Settings edit / Sidebar composer
@@ -80,6 +80,7 @@ Manual trigger + cancel + settings edit + sidebar composer wired end-to-end: dae
 | 2 | `9028ba4` | feat(04-02): main runs/jsonl + bots/runs + bots/policy + ipc/bots handlers + chat.ts routing + preload + types |
 | 3 | `6ba6aaf` | feat(04-02): renderer SidebarComposer + SettingsEditModal + extended sidebar/row + state subscription + chat composer routing |
 | — | `ddf25d9` | test(04-02): thread userDataDir through per-bot allowlist override tests |
+| — | `215e5bf` | docs(04-02): plan SUMMARY — trigger/cancel/run-history/settings-edit/sidebar-composer |
 
 ## What Changed
 
