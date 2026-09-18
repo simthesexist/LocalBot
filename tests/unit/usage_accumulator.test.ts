@@ -92,4 +92,31 @@ describe('usageAccumulator', () => {
     const snap = accumulator.snapshot('msg-4');
     expect(snap?.input).toBe(200);
   });
+
+  it('cache_creation/cache_read follow last-write-wins on successive message_delta events', () => {
+    // Per the Anthropic streaming protocol, message_delta carries the
+    // CUMULATIVE cache tokens for the whole message — each delta overwrites
+    // the prior value (same as `output_tokens`).
+    accumulator.accumulate('msg-5', messageStart(10));
+    accumulator.accumulate('msg-5', messageDelta(20));
+    accumulator.accumulate('msg-5', messageDelta(40));
+    const snap = accumulator.snapshot('msg-5');
+    expect(snap).toBeDefined();
+    // Output tokens are LAST-WRITE-WINS — last delta reported 40, not 60.
+    expect(snap!.output).toBe(40);
+    // Cache creation: 5 (start) overwrites on first delta to 11, then
+    // overwritten again on second delta to 11 (same value here).
+    expect(snap!.cacheCreation).toBe(11);
+    // Cache read follows the same pattern: 7 (start) → 13 → 13.
+    expect(snap!.cacheRead).toBe(13);
+    // Input stays at 10 — message_start happens once.
+    expect(snap!.input).toBe(10);
+    // Total = 10 + 40 + 11 + 13 = 74
+    expect(accumulator.total('msg-5')).toBe(74);
+  });
+
+  it('snapshot() returns undefined for an untracked msgId (not throwing)', () => {
+    expect(accumulator.snapshot('never-seen')).toBeUndefined();
+    expect(accumulator.total('never-seen')).toBe(0);
+  });
 });

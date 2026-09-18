@@ -10,8 +10,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { __TESTING__ } from '../../src/main/llm/summarize';
+import { runSummarizer } from '../../src/main/llm/summarize';
 
-const { parseSummarizerResponse } = __TESTING__;
+const { parseSummarizerResponse, SummarizeAbortError } = __TESTING__;
 
 describe('summarize.parseSummarizerResponse', () => {
   it('parses JSON with summary + facts into the structured result', () => {
@@ -59,5 +60,26 @@ describe('summarize.parseSummarizerResponse', () => {
     }));
     expect(out.summary).toBe('with-array-facts');
     expect(out.factsDelta).toEqual({});
+  });
+});
+
+describe('summarize.runSummarizer (cancel mid-summary)', () => {
+  it('throws SummarizeAbortError when outerSignal is already aborted', async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(runSummarizer([], { outerSignal: ac.signal })).rejects.toBeInstanceOf(
+      SummarizeAbortError,
+    );
+  });
+
+  it('SummarizeAbortError is a stable exception class with category=cancel + code=aborted', () => {
+    // The ipc/chat.ts code branches on `err.category === 'cancel'` to
+    // suppress prompt errors. This verifies the class publishes the right
+    // fields, so the cancel mid-summarize branch in chat.ts can rely on
+    // the shape even if the deeper SDK-integration abort test is skipped.
+    const e = new SummarizeAbortError();
+    expect(e.category).toBe('cancel');
+    expect(e.code).toBe('aborted');
+    expect(e).toBeInstanceOf(Error);
   });
 });

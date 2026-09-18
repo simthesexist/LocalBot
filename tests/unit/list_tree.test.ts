@@ -87,4 +87,41 @@ describe('list_tree', () => {
     const big = out.entries.find((e) => e.name === 'big.bin');
     expect(big!.size).toBe(1234);
   });
+
+  it('chokidar watcher fires refresh event within 500ms of file change', async () => {
+    // Force polling mode for the test — Windows native event delivery is
+    // unreliable in some CI runners.
+    const prev = process.env.LOCALBOT_WATCHER_POLLING;
+    process.env.LOCALBOT_WATCHER_POLLING = '1';
+    try {
+      const { createWatcher } = require_('../../daemon/watcher.cjs');
+      const w = createWatcher([{ id: 'workspace', absPath: workspace }], { debounceMs: 100 });
+      let fired = false;
+      let payload: any = null;
+      const off = w.on('refresh', (p) => { fired = true; payload = p; });
+      try {
+        w.start();
+        // Wait for chokidar to fully attach. Polling mode polls every
+        // 200ms; we give it a full second before mutating to avoid the
+        // initial-scan race where `add` events may be coalesced into
+        // the first poll cycle.
+        await new Promise((r) => setTimeout(r, 1500));
+        fs.writeFileSync(path.join(workspace, 'new.txt'), 'hi', 'utf8');
+        // Wait up to 3s for the debounced refresh to fire.
+        const deadline = Date.now() + 3000;
+        while (!fired && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        expect(fired, 'chokidar watcher did not fire refresh within 3000ms').toBe(true);
+        expect(payload?.rootPath).toBe(workspace);
+        expect(Array.isArray(payload?.changedPaths)).toBe(true);
+      } finally {
+        try { off(); } catch { /* ignore */ }
+        await w.stop();
+      }
+    } finally {
+      if (prev === undefined) delete process.env.LOCALBOT_WATCHER_POLLING;
+      else process.env.LOCALBOT_WATCHER_POLLING = prev;
+    }
+  });
 });

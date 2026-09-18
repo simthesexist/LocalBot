@@ -94,6 +94,47 @@ describe('jsonl router (per-bot)', () => {
     expect(out.headSummary!.turnsFolded).toBe(4);
   });
 
+  it('loadSession(bot) returns the newest session file by mtime across multiple files', async () => {
+    const mod = await freshImport();
+    // Pre-create three session files with distinct mtimes. Use fs directly
+    // since ensureSessionDir is exported from paths, not the jsonl module.
+    fs.mkdirSync(path.join(tempDir, 'sessions', 'default'), { recursive: true });
+    const a = path.join(tempDir, 'sessions', 'default', 'old.jsonl');
+    const b = path.join(tempDir, 'sessions', 'default', 'middle.jsonl');
+    const c = path.join(tempDir, 'sessions', 'default', 'newest.jsonl');
+    const ts = (n: number) => new Date(n);
+    fs.writeFileSync(a, JSON.stringify({ ts: 1, role: 'user', content: 'a-msg' }) + '\n');
+    fs.writeFileSync(b, JSON.stringify({ ts: 2, role: 'user', content: 'b-msg' }) + '\n');
+    fs.writeFileSync(c, JSON.stringify({ ts: 3, role: 'user', content: 'c-msg' }) + '\n');
+    fs.utimesSync(a, ts(1_000_000_000_000), ts(1_000_000_000_000));
+    fs.utimesSync(b, ts(2_000_000_000_000), ts(2_000_000_000_000));
+    fs.utimesSync(c, ts(3_000_000_000_000), ts(3_000_000_000_000));
+
+    const out = await mod.loadSession('default');
+    // Newest mtime wins.
+    expect(out.messages.length).toBeGreaterThan(0);
+    expect(out.messages[0].content).toBe('c-msg');
+  });
+
+  it('headSummary extracted when first row.role === summary after explicit sessionId load', async () => {
+    const mod = await freshImport();
+    await mod.appendMessage(
+      { role: 'user', content: 'one' },
+      { bot: 'default', sessionId: 's-2b' },
+    );
+    await mod.prependSummary('default', 's-2b', {
+      summary: 'prepended recap',
+      turnsFolded: 4,
+      ranAt: new Date().toISOString(),
+      msgId: 'summary-2b',
+    });
+    const out = await mod.loadSession('default', 's-2b');
+    expect(out.headSummary).not.toBeNull();
+    expect(out.headSummary!.summary).toBe('prepended recap');
+    // And the summary row appears at the top of `messages`.
+    expect(out.messages[0].role).toBe('summary');
+  });
+
   it('appendMessage refuses to run without ctx', async () => {
     const mod = await freshImport();
     await expect(

@@ -72,4 +72,16 @@ describe('mergeFacts', () => {
       mergeFacts({}, { bad: { source: 'user', updatedAt: '2026-09-18T10:00:00Z' } as unknown as Facts[string] }),
     ).toThrow(/invalid_facts_schema/);
   });
+
+  it('preserves source="tool" over "user" when updatedAt is newer', () => {
+    const existing: Facts = {
+      name: { value: 1, source: 'user', updatedAt: '2026-01-01T00:00:00Z' },
+    };
+    const merged = mergeFacts(existing, {
+      name: { value: 2, source: 'tool', updatedAt: '2026-09-01T00:00:00Z' },
+    });
+    expect(merged.name.value).toBe(2);
+    expect(merged.name.source).toBe('tool');
+    expect(merged.name.updatedAt).toBe('2026-09-01T00:00:00Z');
+  });
 });
