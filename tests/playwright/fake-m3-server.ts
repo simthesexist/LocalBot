@@ -233,15 +233,150 @@ function streamToolUseResponse(
   return writeSse(res, chunks);
 }
 
+// Phase 3 Wave 3: edit_file tool_use helpers used by tree-diff.test.ts and
+// memory-history.test.ts to drive DiffView + binary placeholder paths
+// end-to-end. The shape mirrors Anthropic's SSE envelope so the official
+// SDK parses it identically.
+
+export interface StreamEditFileOpts {
+  /** The substring the bot wants to find inside the target file. */
+  find: string;
+  /** The substring the bot will write in place of `find`. */
+  replace: string;
+  /** Free-form text emitted AFTER the tool_use completes. Default "Done". */
+  followupText?: string;
+  /** File path passed in the tool_use input. Default "hello.txt". */
+  path?: string;
+  /** Token count carried on message_start. Default 200. */
+  inputTokens?: number;
+}
+
+/**
+ * Build the SSE chunks for an `edit_file` tool_use followed by `followupText`.
+ * Mirrors streamToolUseResponse's chunking but with a deterministic, named
+ * shape so tests can assert against the same payload every run.
+ */
+export function buildEditFileToolUseChunks(opts: StreamEditFileOpts): string[] {
+  const followupText = opts.followupText ?? 'Done';
+  const path = opts.path ?? 'hello.txt';
+  const inputTokens = opts.inputTokens ?? 200;
+  const toolUseId = 'tu_edit';
+  const inputObj = { path, find: opts.find, replace: opts.replace };
+  const inputJson = JSON.stringify(inputObj);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 24;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = followupText.split(/(\s+)/).filter(Boolean);
+
+  const chunks: string[] = [];
+  chunks.push(
+    sseFrame('message_start', {
+      type: 'message_start',
+      message: {
+        id: 'msg_fake_edit',
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        model: 'MiniMax/M3',
+        stop_reason: null,
+        stop_sequence: null,
+        usage: {
+          input_tokens: inputTokens,
+          output_tokens: 0,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: toolUseId, name: 'edit_file', input: {} },
+    }),
+  );
+  inputChunks.forEach((chunk) => {
+    chunks.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: chunk },
+      }),
+    );
+  });
+  chunks.push(
+    sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 1,
+      content_block: { type: 'text', text: '' },
+    }),
+  );
+  tokens.forEach((tok) => {
+    chunks.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'text_delta', text: tok },
+      }),
+    );
+  });
+  chunks.push(
+    sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+    sseFrame('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { output_tokens: 30 },
+    }),
+    sseFrame('message_stop', { type: 'message_stop' }),
+  );
+  return chunks;
+}
+
+/**
+ * Phase 3 Wave 3 — Edit-File SSE helper. Streams an `edit_file` tool_use
+ * envelope for the test that wants to drive the DiffView path end-to-end.
+ * Resolves once the stream has been fully written to the response.
+ */
+export function streamEditFileToolUse(
+  res: http.ServerResponse,
+  opts: StreamEditFileOpts,
+): Promise<void> {
+  return writeSse(res, buildEditFileToolUseChunks(opts));
+}
+
+/**
+ * Phase 3 Wave 3 — Binary edit_file helper. The pre-created workspace
+ * fixture (`hello.bin` with a NUL byte) makes the real daemon's `edit_file`
+ * return `{binary:true}`; the renderer takes the DiffBinaryPlaceholder path.
+ */
+export function streamBinaryEditFile(
+  res: http.ServerResponse,
+  opts: { followupText?: string } = {},
+): Promise<void> {
+  return streamEditFileToolUse(res, {
+    find: 'old',
+    replace: 'new',
+    path: 'hello.bin',
+    followupText: opts.followupText ?? 'Binary edit attempted',
+    inputTokens: 150,
+  });
+}
+
 export async function createFakeM3Server(): Promise<FakeM3Server> {
   // Per-server overrides for the smoke-tools test. When set, every POST is
   // answered with the matching streamToolUseResponse, regardless of tools
   // payload. Undefined = fall back to streamTextResponse based on probe shape.
   // Phase 3: forcedStream now also accepts 'long' so memory-history.test.ts
-  // can drive streamLongResponse for the soft-cap / summarizer path.
+  // can drive streamLongResponse for the soft-cap / summarizer path. Wave 3
+  // adds 'edit_file' + 'binary_edit' so tree-diff.test.ts can drive the
+  // DiffView + DiffBinaryPlaceholder paths.
   let forcedToolUse: StreamToolUseOpts | null = null;
   let forcedLong: StreamLongResponseOpts | null = null;
-  let forcedStream: 'text' | 'tool_use' | 'long' = 'text';
+  let forcedEditFile: StreamEditFileOpts | null = null;
+  let forcedBinaryEditFile: { followupText?: string } | null = null;
+  let forcedStream: 'text' | 'tool_use' | 'long' | 'edit_file' | 'binary_edit' = 'text';
 
   const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
@@ -293,6 +428,14 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
       }
       if (forcedStream === 'long' && forcedLong) {
         void streamLongResponse(res, forcedLong);
+        return;
+      }
+      if (forcedStream === 'edit_file' && forcedEditFile) {
+        void streamEditFileToolUse(res, forcedEditFile);
+        return;
+      }
+      if (forcedStream === 'binary_edit' && forcedBinaryEditFile) {
+        void streamBinaryEditFile(res, forcedBinaryEditFile);
         return;
       }
 
@@ -356,10 +499,29 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
       forcedLong = opts;
       forcedStream = 'long';
     },
+    // Phase 3 Wave 3: edit_file tool_use hook for tree-diff.test.ts.
+    __forceEditFile: (opts: StreamEditFileOpts) => {
+      forcedEditFile = opts;
+      forcedStream = 'edit_file';
+    },
+    // Phase 3 Wave 3: binary edit_file hook for tree-diff.test.ts.
+    __forceBinaryEditFile: (opts: { followupText?: string } = {}) => {
+      forcedBinaryEditFile = opts;
+      forcedStream = 'binary_edit';
+    },
   } as FakeM3Server & {
     __forceToolUse: (opts: StreamToolUseOpts) => void;
     __forceLong: (opts?: StreamLongResponseOpts) => void;
+    __forceEditFile: (opts: StreamEditFileOpts) => void;
+    __forceBinaryEditFile: (opts?: { followupText?: string }) => void;
   };
 }
 
-module.exports = { createFakeM3Server };
+module.exports = {
+  createFakeM3Server,
+  // Phase 3 Wave 3 — exposed for tests that want to drive their own
+  // request lifecycle against the fake server (memory-history + tree-diff).
+  buildEditFileToolUseChunks,
+  streamEditFileToolUse,
+  streamBinaryEditFile,
+};
