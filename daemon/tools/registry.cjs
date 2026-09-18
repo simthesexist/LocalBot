@@ -3,10 +3,33 @@
 //   - tool schemas returned from tools/list so main forwards them to M3
 //   - cancelToolCall tracks in-flight tool children and kills ripgrep on
 //     cancel (Wave 3).
+//
+// Phase 3 Wave 1: extend with memory.read / memory.write / memory.update /
+// tree.list. The first three live in `TOOLS` for LLM-callable surface (only
+// `memory.update` is in the default bot allowlist). tree.list is exposed via
+// the registry so the SYSTEM bypass (main's callTree) can dispatch through
+// the same path; LLM-callable trees are NOT in the default allowlist.
 
 const { DEFAULT_POLICY } = require('../bots/default.cjs');
 
-const TOOLS = ['read_file', 'write_file', 'edit_file', 'list_dir', 'code_search'];
+const TOOLS = [
+  'read_file',
+  'write_file',
+  'edit_file',
+  'list_dir',
+  'code_search',
+  'memory.read',
+  'memory.write',
+  'memory.update',
+  'tree.list',
+];
+
+// Tools that bypass the per-bot allowlist when called from main. The
+// `tools/call` path in main.cjs explicitly sets `bot='_system'` for these
+// (see SYSTEM_TOOLS below), and the registry short-circuits the allowlist
+// check for them so the daemon's own bootstrap code can read/write memory
+// without polluting the bot policy.
+const SYSTEM_TOOLS = new Set(['memory.read', 'memory.write', 'tree.list']);
 
 const SCHEMAS = {
   read_file: {
@@ -76,6 +99,56 @@ const SCHEMAS = {
       required: ['pattern'],
     },
   },
+  'memory.read': {
+    name: 'memory.read',
+    description: 'Read the bot\'s persistent memory (memory.md + facts.json).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        bot: { type: 'string', description: 'Bot id whose memory should be returned.' },
+      },
+      required: ['bot'],
+    },
+  },
+  'memory.write': {
+    name: 'memory.write',
+    description: 'Replace the bot\'s memory.md + facts.json (system call; not in default bot allowlist).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        bot: { type: 'string', description: 'Bot id whose memory should be replaced.' },
+        markdown: { type: 'string', description: 'Full markdown contents of memory.md (<= 8 KB).' },
+        facts: { type: 'object', description: 'Key-value facts object; values are {value, source?, updatedAt?}.', additionalProperties: true },
+      },
+      required: ['bot', 'markdown'],
+    },
+  },
+  'memory.update': {
+    name: 'memory.update',
+    description: 'Append or replace a section of memory.md; optionally update facts. LLM-callable.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        bot: { type: 'string', description: 'Bot id whose memory is being updated.' },
+        section: { type: 'string', description: 'H2 section name (e.g. "Identity", "Preferences").' },
+        content: { type: 'string', description: 'Section content (markdown).' },
+      },
+      required: ['bot', 'section', 'content'],
+    },
+  },
+  'tree.list': {
+    name: 'tree.list',
+    description: 'Recursive workspace tree. Caps per-dir entries + depth; skips node_modules/.git.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Directory path inside workspace. Defaults to ".".' },
+        maxDepth: { type: 'number', description: 'Maximum recursion depth (default 5).' },
+        maxEntriesPerDir: { type: 'number', description: 'Cap entries per dir (default 500).' },
+        exclude: { type: 'array', items: { type: 'string' }, description: 'Names to skip (overrides default).' },
+      },
+    },
+  },
 };
 
 function getPolicy(_botId) {
@@ -90,9 +163,17 @@ function listTools() {
 }
 
 const loaded = new Map();
+// Explicit file map. Most tools follow the `<dotted_name_with_underscores>` rule,
+// but `tree.list` predates that convention and lives at `list_tree.cjs`.
+const TOOL_FILE = {
+  'tree.list': 'list_tree.cjs',
+};
+function fileFor(name) {
+  return TOOL_FILE[name] ?? name.replace(/\./g, '_') + '.cjs';
+}
 function loadTool(name) {
   if (loaded.has(name)) return loaded.get(name);
-  const mod = require(`./${name}.cjs`);
+  const mod = require(`./${fileFor(name)}`);
   loaded.set(name, mod);
   return mod;
 }
@@ -158,7 +239,9 @@ async function callTool(botId, name, args, ctx) {
     throw e;
   }
   // Line 3: allowlist check (BEFORE any require() of the tool module).
-  if (!policy.allowlist.has(name)) {
+  // SYSTEM_TOOLS bypass the allowlist (called from main directly with bot='_system').
+  const isSystem = SYSTEM_TOOLS.has(name) && (botId === '_system' || botId === undefined);
+  if (!isSystem && !policy.allowlist.has(name)) {
     const e = new Error(`tool '${name}' not in bot allowlist`);
     e.code = 'denied';
     e.reason = 'allowlist';
@@ -187,6 +270,7 @@ module.exports = {
   activeChildren, // exposed for tests
   TOOLS,
   SCHEMAS,
+  SYSTEM_TOOLS,
   // Exported for unit tests.
   __test__: { getPolicy, loadTool },
 };

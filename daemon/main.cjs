@@ -1,6 +1,7 @@
 // Daemon entry point. Pure CommonJS so it runs under process.execPath.
 
 const readline = require('node:readline');
+const path = require('node:path');
 const { writeMessage, readMessage } = require('./protocol.cjs');
 const registry = require('./tools/registry.cjs');
 const audit = require('./audit.cjs');
@@ -9,7 +10,7 @@ const audit = require('./audit.cjs');
 // forwards params.bot on initialize and params.bot on every tools/call.
 // The 'tools' field in SERVER_INFO is a placeholder list of *names* (Phase 1
 // compat). The full schemas come from registry.listTools().
-const SERVER_INFO = { server: 'localbot-daemon', version: '0.2.0', tools: [] };
+const SERVER_INFO = { server: 'localbot-daemon', version: '0.3.0', tools: [] };
 
 let nextId = 1;
 const pendingReady = { resolve: null, reject: null };
@@ -64,7 +65,7 @@ function replyResult(id, result) {
 }
 
 // Handshake: write { kind: 'ready' } as the very first line.
-writeMessage(process.stdout, { kind: 'ready', version: '0.2.0' });
+writeMessage(process.stdout, { kind: 'ready', version: '0.3.0' });
 
 const rl = readline.createInterface({ input: process.stdin });
 
@@ -72,6 +73,7 @@ const rl = readline.createInterface({ input: process.stdin });
 // tools/call ctx. It MUST NOT come from any caller other than initialize.
 let workspaceRoot = null;
 let currentBot = 'default';
+let botDir = null; // Phase 3: <userData>/bots/<bot>; threaded into memory_read/write ctx
 
 rl.on('line', async (line) => {
   const obj = readMessage(line);
@@ -94,6 +96,14 @@ rl.on('line', async (line) => {
         if (params && typeof params.bot === 'string') {
           currentBot = params.bot;
           audit.setCurrentBot(params.bot);
+        }
+        // Phase 3: botDir is the canonical <userData>/bots/<bot> directory
+        // for memory IO. Falls back to <userData>/bots/<bot> derived from
+        // userDataDir + bot when the orchestrator doesn't pass it explicitly.
+        if (params && typeof params.botDir === 'string' && params.botDir.length > 0) {
+          botDir = params.botDir;
+        } else if (params && typeof params.userDataDir === 'string' && typeof params.bot === 'string') {
+          botDir = path.join(params.userDataDir, 'bots', params.bot);
         }
         replyResult(id, { ...SERVER_INFO, tools: registry.listTools() });
         break;
@@ -123,6 +133,7 @@ rl.on('line', async (line) => {
           const abortController = ensureAbortController(toolCallId);
           const result = await registry.callTool(bot, name, args, {
             workspaceRoot,
+            botDir,
             toolCallId,
             bot,
             signal: abortController.signal,
@@ -176,6 +187,112 @@ rl.on('line', async (line) => {
           try { ctrl.abort(); } catch { /* ignore */ }
         }
         replyResult(id, registry.cancelToolCall(toolCallId));
+        break;
+      }
+
+      // Phase 3: system memory IO + tree list. These are separate JSON-RPC
+      // methods so main can bypass the per-bot allowlist when reading/writing
+      // its own memory + tree. Internally they route through registry.callTool
+      // with bot='_system' (registry.SYSTEM_TOOLS short-circuits the allowlist).
+      case 'memory/read': {
+        const startedAt = Date.now();
+        const botArg = (params && typeof params.bot === 'string') ? params.bot : currentBot;
+        try {
+          const result = await registry.callTool('_system', 'memory.read', params || {}, {
+            workspaceRoot,
+            botDir,
+            bot: botArg,
+            signal: new AbortController().signal,
+          });
+          audit.appendAudit({
+            tool: 'memory.read',
+            bot: botArg,
+            params: { bot: botArg },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, result);
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'memory.read',
+            bot: botArg,
+            params: { bot: botArg },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'unknown_tool', message: err.message },
+          });
+          replyError(id, err.code || 'memory_read_failed', err.message);
+        }
+        break;
+      }
+
+      case 'memory/write': {
+        const startedAt = Date.now();
+        const botArg = (params && typeof params.bot === 'string') ? params.bot : currentBot;
+        try {
+          const result = await registry.callTool('_system', 'memory.write', params || {}, {
+            workspaceRoot,
+            botDir,
+            bot: botArg,
+            signal: new AbortController().signal,
+          });
+          audit.appendAudit({
+            tool: 'memory.write',
+            bot: botArg,
+            params: { bot: botArg, bytesWritten: result?.bytesWritten, factCount: result?.factCount },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, result);
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'memory.write',
+            bot: botArg,
+            params: { bot: botArg },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'memory_write_failed', message: err.message },
+          });
+          replyError(id, err.code || 'memory_write_failed', err.message);
+        }
+        break;
+      }
+
+      case 'tree/list': {
+        const startedAt = Date.now();
+        const botArg = (params && typeof params.bot === 'string') ? params.bot : currentBot;
+        try {
+          const result = await registry.callTool('_system', 'tree.list', params || {}, {
+            workspaceRoot,
+            botDir,
+            bot: botArg,
+            signal: new AbortController().signal,
+          });
+          const entriesReturned = Array.isArray(result?.entries) ? result.entries.length : 0;
+          audit.appendAudit({
+            tool: 'tree.list',
+            bot: botArg,
+            params: {
+              path: params?.path,
+              maxDepth: params?.maxDepth,
+              maxEntriesPerDir: params?.maxEntriesPerDir,
+              entriesReturned,
+            },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, result);
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'tree.list',
+            bot: botArg,
+            params: { path: params?.path },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'tree_list_failed', message: err.message },
+          });
+          replyError(id, err.code || 'tree_list_failed', err.message);
+        }
         break;
       }
 

@@ -46,6 +46,38 @@ export function botsDir(): string {
   return path.join(userDataDir(), 'bots');
 }
 
+// Phase 3 Wave 1: per-bot directory + memory file + facts file + session
+// JSONL path. All live under <userData>/bots/<bot>/. The daemon's safe_path
+// uses ctx.botDir to enforce containment; main uses these helpers to locate
+// the same paths from its side.
+export function botDir(bot: string): string {
+  return path.join(botsDir(), bot);
+}
+
+export function memoryPath(bot: string): string {
+  return path.join(botDir(bot), 'memory.md');
+}
+
+export function factsPath(bot: string): string {
+  return path.join(botDir(bot), 'facts.json');
+}
+
+export function sessionFilePathForBot(bot: string, sessionId: string): string {
+  return path.join(sessionsDir(), bot, `${sessionId}.jsonl`);
+}
+
+export async function ensureSessionDir(bot: string): Promise<string> {
+  const dir = path.join(sessionsDir(), bot);
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}
+
+export async function ensureBotDir(bot: string): Promise<string> {
+  const dir = botDir(bot);
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}
+
 export async function ensureUserDataDirs(): Promise<void> {
   const dirs = [userDataDir(), auditDir(), sessionsDir(), botsDir()];
   for (const dir of dirs) {

@@ -2,6 +2,9 @@
 // enforcement. Run with: npm test
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require_ = createRequire(import.meta.url);
@@ -11,16 +14,21 @@ const registry = require_('../../daemon/tools/registry.cjs') as {
     botId: string,
     name: string,
     args: Record<string, unknown>,
-    ctx: { workspaceRoot?: string },
-  ) => Promise<{ content?: string }>;
+    ctx: { workspaceRoot?: string; botDir?: string },
+  ) => Promise<unknown>;
   cancelToolCall: (toolCallId: string) => { cancelled: boolean };
   TOOLS: string[];
+  SYSTEM_TOOLS: Set<string>;
+};
+
+const memoryRead = require_('../../daemon/tools/memory_read.cjs') as {
+  call: (args: Record<string, unknown>, ctx: { botDir: string }) => Promise<unknown>;
 };
 
 describe('registry.listTools', () => {
-  it('returns 5 tool schemas with input_schema objects', () => {
+  it('returns 9 tool schemas with input_schema objects', () => {
     const tools = registry.listTools();
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(9);
     for (const t of tools) {
       expect(typeof t.name).toBe('string');
       expect(typeof t.description).toBe('string');
@@ -29,10 +37,13 @@ describe('registry.listTools', () => {
     }
   });
 
-  it('includes the five Phase 2 tool names', () => {
+  it('includes the Phase 2 + Phase 3 tool names', () => {
     const names = registry.listTools().map((t) => t.name);
     expect(names).toEqual(
-      expect.arrayContaining(['read_file', 'write_file', 'edit_file', 'list_dir', 'code_search']),
+      expect.arrayContaining([
+        'read_file', 'write_file', 'edit_file', 'list_dir', 'code_search',
+        'memory.read', 'memory.write', 'memory.update', 'tree.list',
+      ]),
     );
   });
 });
@@ -40,8 +51,6 @@ describe('registry.listTools', () => {
 describe('registry.callTool — allowlist enforcement', () => {
   it('runs an allowlisted tool (read_file)', async () => {
     const tmp = require('node:os').tmpdir();
-    const fs = require('node:fs');
-    const path = require('node:path');
     const ws = fs.mkdtempSync(path.join(tmp, 'localbot-al-low-'));
     try {
       fs.writeFileSync(path.join(ws, 'a.txt'), 'ok', 'utf8');
@@ -53,13 +62,8 @@ describe('registry.callTool — allowlist enforcement', () => {
   });
 
   it('throws code=denied reason=allowlist for a tool that is registered but NOT in the bot allowlist', async () => {
-    // read_file IS in TOOLS but we temporarily drop it from the allowlist to
-    // exercise the allowlist branch without dragging in a non-Phase-2 tool.
     const def = require_('../../daemon/bots/default.cjs') as {
-      DEFAULT_POLICY: {
-        allowlist: Set<string>;
-        denylist: Set<string>;
-      };
+      DEFAULT_POLICY: { allowlist: Set<string>; denylist: Set<string> };
     };
     const hadReadFile = def.DEFAULT_POLICY.allowlist.has('read_file');
     def.DEFAULT_POLICY.allowlist.delete('read_file');
@@ -73,12 +77,8 @@ describe('registry.callTool — allowlist enforcement', () => {
   });
 
   it('throws code=denied reason=denylist for denylisted tools', async () => {
-    // Swap the default policy to add `read_file` to denylist at runtime.
     const def = require_('../../daemon/bots/default.cjs') as {
-      DEFAULT_POLICY: {
-        allowlist: Set<string>;
-        denylist: Set<string>;
-      };
+      DEFAULT_POLICY: { allowlist: Set<string>; denylist: Set<string> };
     };
     const original = new Set(def.DEFAULT_POLICY.denylist);
     def.DEFAULT_POLICY.denylist.add('read_file');
@@ -87,7 +87,6 @@ describe('registry.callTool — allowlist enforcement', () => {
         registry.callTool('default', 'read_file', { path: 'a' }, { workspaceRoot: '/tmp' }),
       ).rejects.toMatchObject({ code: 'denied', reason: 'denylist' });
     } finally {
-      // Restore so we don't leak state to other tests.
       def.DEFAULT_POLICY.denylist = original;
     }
   });
@@ -99,9 +98,89 @@ describe('registry.callTool — allowlist enforcement', () => {
   });
 });
 
+describe('Phase 3 allowlist extensions', () => {
+  it('memory.update is in the default allowlist and runs', async () => {
+    const def = require_('../../daemon/bots/default.cjs') as {
+      DEFAULT_POLICY: { allowlist: Set<string>; denylist: Set<string> };
+    };
+    expect(def.DEFAULT_POLICY.allowlist.has('memory.update')).toBe(true);
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'localbot-mem-allow-'));
+    try {
+      fs.writeFileSync(path.join(tmp, 'memory.md'), '## Identity\nname: bob\n', 'utf8');
+      const result = await registry.callTool(
+        'default',
+        'memory.update',
+        { bot: 'default', section: 'Identity', content: 'name: bob' },
+        { botDir: tmp },
+      );
+      expect(result).toBeTruthy();
+      // The tool mutates the existing memory.md by replacing the matching H2 section.
+      const updated = fs.readFileSync(path.join(tmp, 'memory.md'), 'utf8');
+      expect(updated).toContain('name: bob');
+    } finally {
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('memory.update is NOT in SYSTEM_TOOLS (it goes through normal allowlist)', () => {
+    expect(registry.SYSTEM_TOOLS.has('memory.update')).toBe(false);
+  });
+
+  it('memory.read is in SYSTEM_TOOLS and bypasses allowlist for _system bot', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'localbot-mem-sys-'));
+    try {
+      fs.writeFileSync(path.join(tmp, 'memory.md'), 'hi', 'utf8');
+      const result = await registry.callTool(
+        '_system',
+        'memory.read',
+        { bot: 'default' },
+        { botDir: tmp },
+      );
+      expect(result).toMatchObject({ markdown: 'hi' });
+    } finally {
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('memory.read on a non-system bot throws denied because it is not in allowlist', async () => {
+    const def = require_('../../daemon/bots/default.cjs') as {
+      DEFAULT_POLICY: { allowlist: Set<string> };
+    };
+    const had = def.DEFAULT_POLICY.allowlist.has('memory.read');
+    def.DEFAULT_POLICY.allowlist.delete('memory.read');
+    try {
+      await expect(
+        registry.callTool('default', 'memory.read', { bot: 'default' }, { botDir: '/tmp' }),
+      ).rejects.toMatchObject({ code: 'denied', reason: 'allowlist' });
+    } finally {
+      if (had) def.DEFAULT_POLICY.allowlist.add('memory.read');
+    }
+  });
+
+  it('tree.list is in SYSTEM_TOOLS and bypasses allowlist for _system bot', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'localbot-tree-sys-'));
+    try {
+      fs.writeFileSync(path.join(tmp, 'a.txt'), 'x', 'utf8');
+      const result = await registry.callTool(
+        '_system',
+        'tree.list',
+        { path: '.' },
+        { workspaceRoot: tmp },
+      );
+      expect((result as { entries: unknown[] }).entries.length).toBeGreaterThan(0);
+    } finally {
+      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+});
+
 describe('registry.cancelToolCall', () => {
   it('returns { cancelled: false, reason: "not_found" } when no child is registered', () => {
     const r = registry.cancelToolCall('tc_test_1');
     expect(r).toEqual({ cancelled: false, reason: 'not_found' });
   });
 });
+
+// Reference the memory_read import so vitest doesn't fail on unused-import.
+void memoryRead;
