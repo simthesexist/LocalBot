@@ -98,6 +98,70 @@ interface StreamToolUseOpts {
   followupText: string;
 }
 
+// Phase 3: streamLongResponse is the counterpart to streamTextResponse when
+// the test wants to exercise the summarizer / accumulator / soft-cap
+// trigger. It deliberately emits input_tokens above SOFT_CAP (default
+// 100k) so the main-side logic fires its summarizer path.
+interface StreamLongResponseOpts {
+  body?: string;
+  inputTokens?: number;
+  /** Optional output_tokens carried on message_delta (default 1000). */
+  outputTokens?: number;
+}
+
+function streamLongResponse(
+  res: http.ServerResponse,
+  opts: StreamLongResponseOpts = {},
+): Promise<void> {
+  const body = opts.body ?? 'Long response body for memory injection / accumulate tests. '.repeat(40);
+  const tokens = body.split(/(\s+)/).filter(Boolean);
+  const chunks: string[] = [];
+  chunks.push(
+    sseFrame('message_start', {
+      type: 'message_start',
+      message: {
+        id: 'msg_fake_long',
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        model: 'MiniMax/M3',
+        stop_reason: null,
+        stop_sequence: null,
+        usage: {
+          input_tokens: opts.inputTokens ?? 110_000,
+          output_tokens: 0,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+      },
+    }),
+    sseFrame('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    }),
+  );
+  tokens.forEach((tok) => {
+    chunks.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: tok },
+      }),
+    );
+  });
+  chunks.push(
+    sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+    sseFrame('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: 'end_turn', stop_sequence: null },
+      usage: { output_tokens: opts.outputTokens ?? 1000 },
+    }),
+    sseFrame('message_stop', { type: 'message_stop' }),
+  );
+  return writeSse(res, chunks);
+}
+
 function streamToolUseResponse(
   res: http.ServerResponse,
   opts: StreamToolUseOpts,
@@ -173,8 +237,11 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
   // Per-server overrides for the smoke-tools test. When set, every POST is
   // answered with the matching streamToolUseResponse, regardless of tools
   // payload. Undefined = fall back to streamTextResponse based on probe shape.
+  // Phase 3: forcedStream now also accepts 'long' so memory-history.test.ts
+  // can drive streamLongResponse for the soft-cap / summarizer path.
   let forcedToolUse: StreamToolUseOpts | null = null;
-  let forcedStream: 'text' | 'tool_use' = 'text';
+  let forcedLong: StreamLongResponseOpts | null = null;
+  let forcedStream: 'text' | 'tool_use' | 'long' = 'text';
 
   const server = http.createServer((req, res) => {
     if (req.method === 'OPTIONS') {
@@ -224,10 +291,22 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
         void streamToolUseResponse(res, forcedToolUse);
         return;
       }
+      if (forcedStream === 'long' && forcedLong) {
+        void streamLongResponse(res, forcedLong);
+        return;
+      }
 
       // ── Default routing: probe vs real chat. ──
       if (maxTokens === 1 || userText === 'ping') {
         void streamTextResponse(res, 'ok');
+        return;
+      }
+
+      // ── Phase 3: any user message that starts with "long:" triggers a
+      //     streamLongResponse so the renderer can verify the memory
+      //     injection / event flow without a separate forced-stream flag. ──
+      if (userText.startsWith('long:')) {
+        void streamLongResponse(res, {});
         return;
       }
 
@@ -272,7 +351,15 @@ export async function createFakeM3Server(): Promise<FakeM3Server> {
       forcedToolUse = opts;
       forcedStream = 'tool_use';
     },
-  } as FakeM3Server & { __forceToolUse: (opts: StreamToolUseOpts) => void };
+    // Phase 3: streamLongResponse hook for memory-history.test.ts.
+    __forceLong: (opts: StreamLongResponseOpts = {}) => {
+      forcedLong = opts;
+      forcedStream = 'long';
+    },
+  } as FakeM3Server & {
+    __forceToolUse: (opts: StreamToolUseOpts) => void;
+    __forceLong: (opts?: StreamLongResponseOpts) => void;
+  };
 }
 
 module.exports = { createFakeM3Server };

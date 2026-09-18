@@ -414,3 +414,144 @@ html, body, #root {
   color: var(--color-text-muted);
   cursor: not-allowed;
 }
+
+/* ─── Phase 3: MemoryPill + WorkspaceTree placeholders. ───────────────── */
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+
+.chat-header-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.memory-pill-region {
+  position: relative;
+  display: inline-block;
+}
+
+.memory-pill {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  background: #f3f4f6;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.memory-pill:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.memory-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 12px;
+  z-index: 50;
+}
+
+.memory-panel-header {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.memory-panel-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.memory-panel-updated {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.memory-panel-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 8px 0 0;
+}
+
+.chat-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 0;
+}
+
+.workspace-tree {
+  border-right: 1px solid var(--color-border);
+  background: #fafafa;
+  padding: 12px;
+  font-size: 12px;
+  overflow: auto;
+}
+
+.workspace-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.workspace-tree-truncated {
+  font-size: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.workspace-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workspace-tree-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.workspace-tree-icon {
+  width: 12px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.workspace-tree-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+.workspace-tree-empty,
+.workspace-tree-error {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  padding: 4px 0;
+}
+
+.workspace-tree-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 12px;
+}

@@ -5,6 +5,8 @@ import { Composer } from './Composer';
 import { MessageBubble } from './MessageBubble';
 import { MessageBlock } from './MessageBlock';
 import { ErrorBanner } from './ErrorBanner';
+import { MemoryPill } from './MemoryPill';
+import { WorkspaceTree } from './WorkspaceTree';
 import { useMessages } from '../state/messages';
 import type { ChatMessage, MessageBlock as MessageBlockT } from '../../shared/types';
 
@@ -73,9 +75,13 @@ export function Chat({ initialMessages }: ChatProps) {
     <div className="chat-shell">
       <header className="chat-header" data-testid="chat-header">
         <span className="chat-title">Localbot</span>
+        <div className="chat-header-right">
+          <MemoryPill bot="default" />
+        </div>
       </header>
 
       <div className="chat-body">
+        <WorkspaceTree workspaceRoot="." />
         {daemonStatus.state !== 'ready' && (
           <ErrorBanner
             variant="daemon"
