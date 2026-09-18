@@ -116,7 +116,17 @@ test('daemon read_file end-to-end + allowlist refusal', async () => {
     });
     expect(initResp.result.server).toBe('localbot-daemon');
     expect(Array.isArray(initResp.result.tools)).toBe(true);
-    expect(initResp.result.tools).toHaveLength(5);
+    // Phase 3 expanded the registry from 5 → 9 tools (added memory.read,
+    // memory.write, memory.update, tree.list).
+    expect(initResp.result.tools.length).toBeGreaterThanOrEqual(5);
+    const toolNames = (initResp.result.tools as Array<{ name: string }>).map((t) => t.name);
+    for (const name of ['read_file', 'write_file', 'edit_file', 'list_dir', 'code_search']) {
+      expect(toolNames, `expected ${name} in tools list`).toContain(name);
+    }
+    // The new Phase 3 tools should be advertised in the initialize response.
+    for (const name of ['memory.read', 'memory.write', 'memory.update', 'tree.list']) {
+      expect(toolNames, `expected ${name} in tools list`).toContain(name);
+    }
 
     // ─── 1. Happy path: read_file returns the workspace file's content. ───
     const readResp = await rpc.send('tools/call', {
@@ -344,6 +354,198 @@ test('write_file + edit_file + list_dir round-trip end-to-end', async () => {
     lines.find((l: any) => l.tool_use_id === id),
   );
   for (const l of okLines) expect(l.outcome).toBe('ok');
+
+  // Cleanup.
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+});
+
+test('memory round-trip + path containment + tree.list recursive/exclude', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'localbot-daemon-mem-'));
+  const workspace = path.join(tmp, 'workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  // Pre-populate the workspace so tree.list has something to enumerate,
+  // including the directories that should be excluded by default.
+  fs.writeFileSync(path.join(workspace, 'README.md'), 'hello', 'utf8');
+  fs.mkdirSync(path.join(workspace, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'src', 'index.ts'), 'console.log("hi")', 'utf8');
+  fs.mkdirSync(path.join(workspace, 'src', 'nested'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'src', 'nested', 'deep.ts'), 'export {}', 'utf8');
+  fs.mkdirSync(path.join(workspace, 'node_modules', 'pkg'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, 'node_modules', 'pkg', 'index.js'), 'module.exports = {}', 'utf8');
+  fs.mkdirSync(path.join(workspace, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(workspace, '.git', 'HEAD'), 'ref: refs/heads/main', 'utf8');
+
+  const daemonEntry = path.join(process.cwd(), 'daemon', 'main.cjs');
+  const child = spawn(process.execPath, [daemonEntry], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, LOCALBOT_USER_DATA_DIR: tmp },
+  }) as ChildProcessByStdio<Writable, Readable>;
+
+  const stderrLines: string[] = [];
+  child.stderr?.on('data', (chunk) => stderrLines.push(chunk.toString('utf8')));
+
+  try {
+    const ready = await awaitReady(child);
+    expect(ready, 'daemon failed to emit {kind:"ready"} within 10s').toBe(true);
+
+    const rpc = createJsonRpcClient(child);
+    await rpc.send('initialize', {
+      client: 'localbot-mem-test',
+      version: '0.3.0',
+      userDataDir: tmp,
+      bot: 'default',
+      workspaceRoot: workspace,
+    });
+
+    // ─── 1. memory.write replaces markdown + facts for a bot. ───
+    const wResp = await rpc.send('memory/write', {
+      bot: 'default',
+      markdown: '# Memory\n\n- loves espresso\n- lives in Seattle\n',
+      facts: {
+        city: { value: 'Seattle', source: 'user', updatedAt: '2026-09-18T10:00:00Z' },
+        drink: { value: 'espresso', source: 'user', updatedAt: '2026-09-18T10:00:00Z' },
+      },
+    });
+    expect(wResp.error, `memory/write failed: ${JSON.stringify(wResp)}`).toBeUndefined();
+    expect(wResp.result).toMatchObject({ factCount: 2 });
+    expect(typeof wResp.result.bytesWritten).toBe('number');
+    expect(wResp.result.bytesWritten).toBeGreaterThan(0);
+
+    // ─── 2. memory/read returns what we wrote. ───
+    const rResp = await rpc.send('memory/read', { bot: 'default' });
+    expect(rResp.error, `memory/read failed: ${JSON.stringify(rResp)}`).toBeUndefined();
+    expect(rResp.result.markdown).toContain('# Memory');
+    expect(rResp.result.markdown).toContain('espresso');
+    expect(rResp.result.facts.city.value).toBe('Seattle');
+    expect(rResp.result.facts.drink.value).toBe('espresso');
+    expect(rResp.result.factCount).toBe(2);
+    expect(rResp.result.bytes).toBe(wResp.result.bytesWritten);
+
+    // ─── 3. path containment: tree/list refuses a `..` traversal that
+    //         would escape the workspace root (safePath enforcement). ───
+    const traversal = await rpc.send('tree/list', {
+      path: '../../../etc',
+      maxDepth: 1,
+    });
+    expect(traversal.error, `tree/list traversal succeeded unexpectedly: ${JSON.stringify(traversal)}`).toBeTruthy();
+    expect(traversal.error.code).toBe('outside_workspace');
+
+    // ─── 3b. path containment: an absolute-path argument that points
+    //          outside the workspace is also refused. ───
+    const absTraversal = await rpc.send('tree/list', {
+      path: 'C:\\Windows\\System32',
+      maxDepth: 1,
+    });
+    expect(absTraversal.error, `tree/list abs-traversal succeeded unexpectedly: ${JSON.stringify(absTraversal)}`).toBeTruthy();
+    expect(absTraversal.error.code).toBe('outside_workspace');
+
+    // ─── 3c. path containment: bytesWritten cap (8KB) on memory.write. ───
+    const tooLarge = await rpc.send('memory/write', {
+      bot: 'default',
+      markdown: 'x'.repeat(9000),
+    });
+    expect(tooLarge.error, `memory/write oversized succeeded unexpectedly: ${JSON.stringify(tooLarge)}`).toBeTruthy();
+    expect(tooLarge.error.code).toBe('too_large');
+
+    // ─── 4. tree.list enumeration of the workspace. ───
+    const treeResp = await rpc.send('tree/list', {
+      path: '.',
+      maxDepth: 5,
+    });
+    expect(treeResp.error, `tree/list failed: ${JSON.stringify(treeResp)}`).toBeUndefined();
+    expect(Array.isArray(treeResp.result.entries)).toBe(true);
+    const names = treeResp.result.entries.map((e: { name: string }) => e.name);
+    expect(names).toContain('README.md');
+    expect(names).toContain('src');
+    // Default exclusions: node_modules and .git MUST be filtered.
+    expect(names).not.toContain('node_modules');
+    expect(names).not.toContain('.git');
+
+    // ─── 5. tree/list recursion up to maxDepth. ───
+    const deep = await rpc.send('tree/list', {
+      path: '.',
+      maxDepth: 3,
+    });
+    expect(deep.error, `tree/list deep failed: ${JSON.stringify(deep)}`).toBeUndefined();
+    const srcEntry = deep.result.entries.find((e: { name: string }) => e.name === 'src');
+    expect(srcEntry).toBeTruthy();
+    expect(srcEntry!.type).toBe('dir');
+    // At depth 3 the `nested/deep.ts` chain must be reachable.
+    const nestedEntry = (srcEntry!.children as Array<{ name: string; children?: Array<{ name: string }> }>)
+      .find((c) => c.name === 'nested');
+    expect(nestedEntry, 'src should have a nested dir entry at depth 3').toBeTruthy();
+    const deepEntry = nestedEntry!.children?.find((c) => c.name === 'deep.ts');
+    expect(deepEntry, 'nested should have a deep.ts entry at depth 3').toBeTruthy();
+
+    // ─── 6. tree/list maxEntriesPerDir cap reports truncated:true. ───
+    // Build 8 files in a fresh dir so the cap (4) is exercised.
+    const manyDir = path.join(workspace, 'many');
+    fs.mkdirSync(manyDir, { recursive: true });
+    for (let i = 0; i < 8; i++) {
+      fs.writeFileSync(path.join(manyDir, `f${i}.txt`), String(i), 'utf8');
+    }
+    const capped = await rpc.send('tree/list', {
+      path: 'many',
+      maxDepth: 1,
+      maxEntriesPerDir: 4,
+    });
+    expect(capped.error, `tree/list capped failed: ${JSON.stringify(capped)}`).toBeUndefined();
+    expect(capped.result.entries.length).toBe(4);
+    expect(capped.result.truncated).toBe(true);
+
+    // Flush audit.
+    await new Promise((r) => setTimeout(r, 300));
+  } finally {
+    child.stdin.end();
+    await new Promise((r) => setTimeout(r, 100));
+    if (!child.killed) child.kill();
+  }
+
+  // Audit assertions: at least one row per tool we called.
+  const auditDirPath = path.join(tmp, 'audit');
+  const files = fs.existsSync(auditDirPath)
+    ? fs.readdirSync(auditDirPath).filter((f) => f.endsWith('.jsonl'))
+    : [];
+  expect(files.length).toBeGreaterThan(0);
+  const dateFile = files.find((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f));
+  expect(dateFile).toBeTruthy();
+  const lines = fs
+    .readFileSync(path.join(auditDirPath, dateFile!), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      try {
+        return JSON.parse(l);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  for (const tool of ['memory.read', 'memory.write', 'tree.list']) {
+    const row = lines.find((l: any) => l.tool === tool);
+    expect(
+      row,
+      `expected an audit line for ${tool}\nGot: ${JSON.stringify(lines, null, 2)}`,
+    ).toBeTruthy();
+  }
+
+  // The traversal attempt should have produced a tree.list audit row with
+  // outcome=error and code=outside_workspace.
+  const traversalRow = lines.find(
+    (l: any) => l.tool === 'tree.list' && l.outcome === 'error' && l.error?.code === 'outside_workspace',
+  );
+  expect(traversalRow, 'expected the tree.list traversal to land in audit as outside_workspace').toBeTruthy();
+
+  // And the too-large memory.write attempt should land in audit as `too_large`.
+  const tooLargeRow = lines.find(
+    (l: any) => l.tool === 'memory.write' && l.outcome === 'error' && l.error?.code === 'too_large',
+  );
+  expect(tooLargeRow, 'expected the oversized memory.write to land in audit as too_large').toBeTruthy();
 
   // Cleanup.
   try {
