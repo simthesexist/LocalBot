@@ -78,7 +78,7 @@ export type LocalbotEventPayload =
   | BotStatusEvent;
 
 export interface LocalbotApi {
-  sendMessage: (content: string, msgId: string) => Promise<{ ok: boolean; error?: string }>;
+  sendMessage: (content: string, msgId: string, bot?: string) => Promise<{ ok: boolean; error?: string }>;
   cancel: (msgId: string) => Promise<{ ok: boolean }>;
   key: {
     get: () => Promise<KeyGetResult>;

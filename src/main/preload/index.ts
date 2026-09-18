@@ -32,7 +32,7 @@ function on(channel: string, handler: (payload: any) => void): () => void {
 }
 
 const api: LocalbotApi = {
-  sendMessage: (content, msgId) => ipcRenderer.invoke(CHANNELS.SEND_MESSAGE, { content, msgId }),
+  sendMessage: (content, msgId, bot) => ipcRenderer.invoke(CHANNELS.SEND_MESSAGE, { content, msgId, bot }),
   cancel: (msgId) => ipcRenderer.invoke(CHANNELS.CANCEL, msgId),
   key: {
     get: () => ipcRenderer.invoke(CHANNELS.KEY_GET),
