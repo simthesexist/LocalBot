@@ -29,11 +29,12 @@ const chokidar = require('chokidar');
 function createWatcher(rootPaths, opts) {
   const debounceMs = (opts && typeof opts.debounceMs === 'number') ? opts.debounceMs : 250;
 
-  // Map<absPath, { id, pendingChanged: Set<string>, timer: NodeJS.Timeout | null, listeners: Array<Function> }>
+  // Map<absPath, { id, absPath, pendingChanged: Set<string>, timer: NodeJS.Timeout | null, listeners: Array<Function> }>
   const state = new Map();
   for (const r of rootPaths || []) {
     state.set(r.absPath, {
       id: r.id,
+      absPath: r.absPath,
       pendingChanged: new Set(),
       timer: null,
       listeners: [],
@@ -88,8 +89,12 @@ function createWatcher(rootPaths, opts) {
       persistent: true,
       ignored: ['**/node_modules/**', '**/.git/**'],
       // Polling:false is the default. Windows-first; chokidar's native
-      // watcher works on Windows 11 (RESEARCH.md A2).
-      usePolling: false,
+      // watcher works on Windows 11 (RESEARCH.md A2). Tests can opt into
+      // polling by passing POLLING_TEST=1 — some CI runners (Windows
+      // containers, sandboxed runners) don't deliver ReadDirectoryChangesW
+      // events to Node's event loop.
+      usePolling: process.env.LOCALBOT_WATCHER_POLLING === '1',
+      interval: 200,
     });
     const handler = (eventName) => (p) => {
       const rootPath = findRoot(p);
