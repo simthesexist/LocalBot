@@ -3,11 +3,112 @@
 const readline = require('node:readline');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { writeMessage, readMessage } = require('./protocol.cjs');
 const registry = require('./tools/registry.cjs');
 const audit = require('./audit.cjs');
 const { createWatcher } = require('./watcher.cjs');
 const botLoader = require('./bots/loader.cjs');
+const { appendRun: appendRunRecord } = require('./runs/jsonl.cjs');
+
+// Phase 4 Wave 2: per-runId AbortController map for bots/trigger + bots/cancel.
+// Keyed by runId so multiple bots can run concurrently (Pitfall 10).
+const activeRuns = new Map();
+// Side map: runId → bot id (so bots/cancel can stamp the audit line).
+const activeRunBots = new Map();
+
+/**
+ * runSendMessageCycle(bot, content, runId, signal) — runs one sendMessage
+ * cycle in-process via the @anthropic-ai/sdk CJS bundle. Streams tokens as
+ * `chat:token` notifications, persists the assistant turn, and writes one
+ * RunRecord on completion. The cancel surface is `signal.aborted`.
+ *
+ * Wave 2 PLANNER RECOMMENDATION: daemon is CommonJS so we `require()`
+ * the SDK's CJS bundle directly — no subprocess, no Electron fork. The
+ * SDK key is loaded from <userDataDir>/api-key.bin via safeStorage
+ * (Phase 1). If no key is configured, we abort the cycle with
+ * exitReason='errored' and error.code='missing_api_key'.
+ */
+async function runSendMessageCycle(userDataDir, bot, content, runId, signal) {
+  const startedAt = Date.now();
+  let exitReason = 'completed';
+  let errorPayload = undefined;
+  let messageCount = 0;
+  let aggregated = '';
+
+  // Read API key from <userDataDir>/api-key.bin (Phase 1 safeStorage shape).
+  let apiKey;
+  try {
+    apiKey = fs.readFileSync(path.join(userDataDir, 'api-key.bin'), 'utf8');
+  } catch {
+    apiKey = process.env.ANTHROPIC_API_KEY || '';
+  }
+
+  if (!apiKey) {
+    exitReason = 'errored';
+    errorPayload = { code: 'missing_api_key', message: 'no api key configured' };
+    return { exitReason, errorPayload, messageCount, durationMs: Date.now() - startedAt };
+  }
+
+  let client;
+  try {
+    // CommonJS require of the SDK's CJS bundle. The SDK ships both ESM
+    // and CJS; the CJS bundle exports the Anthropic class as the default.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { default: Anthropic } = require('@anthropic-ai/sdk');
+    client = new Anthropic({ apiKey });
+  } catch (err) {
+    exitReason = 'errored';
+    errorPayload = { code: 'sdk_init_failed', message: err.message };
+    return { exitReason, errorPayload, messageCount, durationMs: Date.now() - startedAt };
+  }
+
+  const sessionId = new Date().toISOString().replace(/[:.]/g, '-');
+  const sessionDir = path.join(userDataDir, 'sessions', bot);
+  fs.mkdirSync(sessionDir, { recursive: true });
+  const sessionFile = path.join(sessionDir, `${sessionId}.jsonl`);
+
+  try {
+    // Persist the user turn.
+    const userRow = { ts: Date.now(), role: 'user', content, msgId: `${runId}-m0` };
+    fs.appendFileSync(sessionFile, JSON.stringify(userRow) + '\n', 'utf8');
+    messageCount++;
+
+    // Build minimal system prompt + messages for the single-cycle call.
+    const system = 'You are Localbot. Be concise. Use tools when useful.';
+    const stream = client.messages.stream({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1024,
+      system,
+      messages: [{ role: 'user', content }],
+    }, { signal });
+
+    stream.on('text', (text) => {
+      aggregated += text;
+      sendNotification('chat:token', { msgId: `${runId}-m1`, delta: text });
+    });
+
+    await stream.finalMessage();
+
+    if (signal && signal.aborted) {
+      exitReason = 'cancelled';
+    } else {
+      // Persist the assistant turn.
+      const assistantRow = { ts: Date.now(), role: 'assistant', content: aggregated, msgId: `${runId}-m1` };
+      fs.appendFileSync(sessionFile, JSON.stringify(assistantRow) + '\n', 'utf8');
+      messageCount++;
+    }
+  } catch (err) {
+    if (signal && signal.aborted) {
+      exitReason = 'cancelled';
+    } else {
+      exitReason = 'errored';
+      errorPayload = { code: err.code || 'cycle_failed', message: err.message };
+    }
+  }
+
+  return { exitReason, errorPayload, messageCount, durationMs: Date.now() - startedAt };
+}
 
 // Phase 2: per-bot policy lives in the daemon; the orchestrator (main)
 // forwards params.bot on initialize and params.bot on every tools/call.
@@ -482,6 +583,169 @@ rl.on('line', async (line) => {
             error: { code: err.code || 'bots_delete_failed', message: err.message },
           });
           replyError(id, err.code || 'bots_delete_failed', err.message);
+        }
+        break;
+      }
+
+      // Phase 4 Wave 2: bots/update, bots/trigger, bots/cancel. The first
+      // patches config.json atomically; trigger and cancel manage the
+      // per-runId AbortController map + RunRecord history (Pitfall 10).
+      case 'bots/update': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) throw Object.assign(new Error('daemon not initialized'), { code: 'daemon_not_initialized' });
+          const p = params || {};
+          const botId = typeof p.bot === 'string' ? p.bot : '';
+          if (!botId) throw Object.assign(new Error('bot required'), { code: 'invalid_id' });
+          const patch = (p.patch && typeof p.patch === 'object' && !Array.isArray(p.patch)) ? p.patch : {};
+          const written = botLoader.writeConfigPatch(userDataDirState, botId, patch);
+          // Audit minimization (T-P4-17): only record the changedKeys array.
+          audit.appendAudit({
+            tool: 'bots.update',
+            bot: botId,
+            params: { changedKeys: Object.keys(patch).sort() },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, bot: written });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'bots.update',
+            bot: (params && typeof params.bot === 'string') ? params.bot : currentBot,
+            params: { changedKeys: (params && params.patch) ? Object.keys(params.patch).sort() : [] },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_update_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_update_failed', err.message);
+        }
+        break;
+      }
+
+      case 'bots/trigger': {
+        const startedAt = Date.now();
+        const p = params || {};
+        const botId = typeof p.bot === 'string' ? p.bot : '';
+        const content = typeof p.content === 'string' ? p.content : '';
+        if (!botId) {
+          replyError(id, 'invalid_id', 'bot required');
+          break;
+        }
+        if (content.length === 0) {
+          replyError(id, 'invalid_content', 'content required');
+          break;
+        }
+        // Validate the bot exists (throws unknown_bot otherwise).
+        botLoader.readConfig(userDataDirState, botId);
+
+        const runId = (typeof p.runId === 'string' && p.runId.length > 0)
+          ? p.runId
+          : crypto.randomUUID();
+        const controller = new AbortController();
+        activeRuns.set(runId, controller);
+        activeRunBots.set(runId, botId);
+
+        // Broadcast running status (Pitfall 9 — every transition).
+        sendNotification('bot:status', { bot: botId, status: 'running', runId, ts: new Date().toISOString() });
+
+        try {
+          const cycle = await runSendMessageCycle(userDataDirState, botId, content, runId, controller.signal);
+
+          // Pitfall 6 ordering: RunRecord append FIRST, then status patch.
+          const record = {
+            ts: new Date().toISOString(),
+            runId,
+            trigger: 'manual',
+            durationMs: cycle.durationMs,
+            exitReason: cycle.exitReason,
+            messageCount: cycle.messageCount,
+          };
+          if (cycle.errorPayload) record.error = cycle.errorPayload;
+          await appendRunRecord(userDataDirState, botId, record);
+
+          // Now patch config.json#status + lastRunAt (best-effort).
+          try {
+            botLoader.writeConfigPatch(userDataDirState, botId, {
+              status: cycle.exitReason === 'completed' || cycle.exitReason === 'cancelled' ? 'idle' : 'errored',
+              lastRunAt: record.ts,
+              lastRunExitReason: cycle.exitReason,
+              lastRunError: cycle.errorPayload ? cycle.errorPayload.message : undefined,
+            });
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn(`[bots/trigger] status patch failed for bot=${botId}: ${e.message}`);
+          }
+
+          // Broadcast terminal status.
+          sendNotification('bot:status', {
+            bot: botId,
+            status: cycle.exitReason === 'completed' || cycle.exitReason === 'cancelled' ? 'idle' : 'errored',
+            runId,
+            ts: new Date().toISOString(),
+          });
+
+          // Audit minimization (T-P4-19): no error.message text in params.
+          audit.appendAudit({
+            tool: 'bots.run',
+            bot: botId,
+            params: { runId, trigger: 'manual', messageCount: cycle.messageCount },
+            outcome: cycle.exitReason === 'errored' ? 'error' : 'ok',
+            durationMs: cycle.durationMs,
+            error: cycle.errorPayload,
+          });
+          replyResult(id, { ok: true, runId, exitReason: cycle.exitReason });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'bots.run',
+            bot: botId,
+            params: { runId, trigger: 'manual' },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_run_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_run_failed', err.message);
+        } finally {
+          activeRuns.delete(runId);
+          activeRunBots.delete(runId);
+        }
+        break;
+      }
+
+      case 'bots/cancel': {
+        const startedAt = Date.now();
+        try {
+          const p = params || {};
+          const runId = typeof p.runId === 'string' ? p.runId : '';
+          if (!runId) {
+            throw Object.assign(new Error('runId required'), { code: 'no_such_run' });
+          }
+          const ctrl = activeRuns.get(runId);
+          if (!ctrl) {
+            throw Object.assign(new Error(`no active run: ${runId}`), { code: 'no_such_run' });
+          }
+          try { ctrl.abort(); } catch { /* ignore */ }
+          // The aborted runSendMessageCycle writes its cancelled RunRecord
+          // before exiting; we don't write one here to avoid double-write.
+          // Look up the bot for the audit line — track via a side map.
+          const botForRun = activeRunBots.get(runId) || currentBot;
+          audit.appendAudit({
+            tool: 'bots.cancel',
+            bot: botForRun,
+            params: { runId },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'bots.cancel',
+            bot: currentBot,
+            params: { runId: (params && typeof params.runId === 'string') ? params.runId : '' },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_cancel_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_cancel_failed', err.message);
         }
         break;
       }

@@ -285,12 +285,79 @@ function botExists(userDataDir, bot) {
   return fs.existsSync(cfgPath);
 }
 
+/**
+ * writeConfigPatch(userDataDir, bot, patch) → BotConfig (the merged+written config).
+ *
+ * Merges `patch` shallowly into the existing config (preserves id, createdAt,
+ * and lastRunAt — none of which are user-editable in AGENT-04), re-validates
+ * the ALLOWED_CONFIG_KEYS schema allowlist on the merged object, and writes
+ * atomically. Rejects `id` and `createdAt` in `patch` with deterministic codes.
+ *
+ * T-P4-13: bots/update must reject id changes (re-routing history to a
+ * different bot would be a tampering surface).
+ * T-P4-18 / Pitfall 6: lastRunAt is preserved on unrelated patches so an
+ * edit doesn't reset the "last run" indicator.
+ */
+function writeConfigPatch(userDataDir, bot, patch) {
+  if (typeof userDataDir !== 'string' || userDataDir.length === 0) {
+    throw err('invalid_path', 'userDataDir is required');
+  }
+  if (typeof bot !== 'string' || !ID_REGEX.test(bot)) {
+    throw err('invalid_id', `bot id must match /^[a-z0-9][a-z0-9-]{0,31}$/: ${bot}`);
+  }
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw err('invalid_patch', 'patch must be an object');
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'id')) {
+    throw err('invalid_id_change', 'cannot change bot id via patch');
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'createdAt')) {
+    throw err('created_at_immutable', 'cannot change createdAt via patch');
+  }
+
+  const existing = readConfig(userDataDir, bot);
+  if (existing === null) {
+    throw err('unknown_bot', `bot does not exist: ${bot}`);
+  }
+
+  const now = new Date().toISOString();
+  // Pitfall 6: never clear lastRunAt on an unrelated patch.
+  const merged = {
+    ...existing,
+    ...patch,
+    schemaVersion: SCHEMA_VERSION,
+    updatedAt: now,
+    status: existing.status ?? 'idle',
+    lastRunAt: existing.lastRunAt,
+    lastRunExitReason: existing.lastRunExitReason,
+    lastRunError: existing.lastRunError,
+  };
+
+  validateConfig(merged);
+
+  const botsRoot = path.join(userDataDir, 'bots');
+  const botDir = safePathSync(botsRoot, bot);
+  fs.mkdirSync(botDir, { recursive: true });
+  const cfgPath = safePathSync(botDir, 'config.json');
+
+  const tmp = `${cfgPath}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(merged, null, 2), 'utf8');
+    fs.renameSync(tmp, cfgPath);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    throw e;
+  }
+  return merged;
+}
+
 module.exports = {
   ALLOWED_CONFIG_KEYS,
   SCHEMA_VERSION,
   deriveSlug,
   readConfig,
   writeConfig,
+  writeConfigPatch,
   listAllBots,
   deleteBot,
   botExists,
