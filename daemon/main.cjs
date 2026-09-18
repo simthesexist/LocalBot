@@ -513,26 +513,24 @@ rl.on('line', async (line) => {
             fs.writeFileSync(factsPath, '{}', 'utf8');
           }
 
-          // Audit minimization (T-P4-10): only record name + persona byte
-          // count — never the persona content or workspace path.
-          const personaBytes = Buffer.byteLength(written.persona || '', 'utf8');
+          // Audit minimization (T-P4-10 + T-P4-22): only record the id and
+          // name — never the persona content, persona bytes, workspace path,
+          // or allowlist contents. The audit envelope already carries `bot`
+          // (the id); name is the human label.
           audit.appendAudit({
             tool: 'bots.create',
             bot: botId,
-            params: { name: written.name, personaBytes },
+            params: { id: botId, name: written.name },
             outcome: 'ok',
             durationMs: Date.now() - startedAt,
           });
           replyResult(id, { ok: true, bot: written });
         } catch (err) {
           // Audit on failure still keeps the params minimization pattern.
-          const personaBytes = (params && typeof params.persona === 'string')
-            ? Buffer.byteLength(params.persona, 'utf8')
-            : 0;
           audit.appendAudit({
             tool: 'bots.create',
             bot: (params && typeof params.id === 'string') ? params.id : (params && typeof params.name === 'string' ? params.name : currentBot),
-            params: { name: params && typeof params.name === 'string' ? params.name : '', personaBytes },
+            params: { id: (params && typeof params.id === 'string') ? params.id : '', name: params && typeof params.name === 'string' ? params.name : '' },
             outcome: 'error',
             durationMs: Date.now() - startedAt,
             error: { code: err.code || 'bots_create_failed', message: err.message },
@@ -684,7 +682,9 @@ rl.on('line', async (line) => {
             ts: new Date().toISOString(),
           });
 
-          // Audit minimization (T-P4-19): no error.message text in params.
+          // Audit minimization (T-P4-19 + T-P4-23): no error.message text
+          // in params, no `bot` field (envelope already carries it). Only
+          // {runId, trigger, messageCount}.
           audit.appendAudit({
             tool: 'bots.run',
             bot: botId,
@@ -695,6 +695,7 @@ rl.on('line', async (line) => {
           });
           replyResult(id, { ok: true, runId, exitReason: cycle.exitReason });
         } catch (err) {
+          // Even on outer catch, params stay minimal — {runId, trigger}.
           audit.appendAudit({
             tool: 'bots.run',
             bot: botId,
@@ -726,17 +727,17 @@ rl.on('line', async (line) => {
           try { ctrl.abort(); } catch { /* ignore */ }
           // The aborted runSendMessageCycle writes its cancelled RunRecord
           // before exiting; we don't write one here to avoid double-write.
-          // Look up the bot for the audit line — track via a side map.
-          const botForRun = activeRunBots.get(runId) || currentBot;
+          // Audit minimization (T-P4-23): only {runId}. Bot is in envelope.
           audit.appendAudit({
             tool: 'bots.cancel',
-            bot: botForRun,
+            bot: activeRunBots.get(runId) || currentBot,
             params: { runId },
             outcome: 'ok',
             durationMs: Date.now() - startedAt,
           });
           replyResult(id, { ok: true });
         } catch (err) {
+          // Audit minimization: error case still keeps params minimal.
           audit.appendAudit({
             tool: 'bots.cancel',
             bot: currentBot,

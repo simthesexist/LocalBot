@@ -58,6 +58,8 @@ const api: LocalbotApi = {
     update: (req) => ipcRenderer.invoke(CHANNELS.BOTS_UPDATE, req),
     trigger: (req) => ipcRenderer.invoke(CHANNELS.BOTS_TRIGGER, req),
     cancel: (req) => ipcRenderer.invoke(CHANNELS.BOTS_CANCEL, req),
+    // Phase 4 Wave 3: paginated run history read.
+    runs: (req) => ipcRenderer.invoke(CHANNELS.BOTS_RUNS, req),
   },
   // One-way: renderer asks main to re-send EVENT_APP_INIT. Used in App.tsx
   // after the app:init listener is registered to close the

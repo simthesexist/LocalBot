@@ -31,7 +31,7 @@ function appendRun(userDataDir, bot, record) {
   return next;
 }
 
-function listRuns(userDataDir, bot, limit) {
+function listRuns(userDataDir, bot, limit, offset) {
   return new Promise((resolve) => {
     const dir = path.join(userDataDir, 'runs', bot);
     const file = path.join(dir, 'bot.jsonl');
@@ -41,11 +41,20 @@ function listRuns(userDataDir, bot, limit) {
         return resolve([]);
       }
       const cap = typeof limit === 'number' && limit > 0 ? limit : 50;
+      const skip = typeof offset === 'number' && offset > 0 ? offset : 0;
       const lines = text.split('\n').filter((l) => l.trim().length > 0);
+      // Newest-first: iterate from the tail. Skip `offset` rows then
+      // collect up to `cap`. Caller asks for cap + 1 to derive hasMore.
       const out = [];
+      let skipped = 0;
       for (let i = lines.length - 1; i >= 0 && out.length < cap; i--) {
         try {
-          out.push(JSON.parse(lines[i]));
+          const row = JSON.parse(lines[i]);
+          if (skipped < skip) {
+            skipped++;
+            continue;
+          }
+          out.push(row);
         } catch { /* skip malformed */ }
       }
       resolve(out);

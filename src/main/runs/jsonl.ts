@@ -23,8 +23,13 @@ export async function appendRun(bot: string, record: RunRecord): Promise<void> {
   return next;
 }
 
-export async function listRuns(bot: string, limit?: number): Promise<RunRecord[]> {
+export async function listRuns(
+  bot: string,
+  limit?: number,
+  offset?: number,
+): Promise<RunRecord[]> {
   const cap = typeof limit === 'number' && limit > 0 ? limit : 50;
+  const skip = typeof offset === 'number' && offset > 0 ? offset : 0;
   const file = path.join(runsDir(bot), 'bot.jsonl');
   let text: string;
   try {
@@ -33,10 +38,19 @@ export async function listRuns(bot: string, limit?: number): Promise<RunRecord[]
     return [];
   }
   const lines = text.split('\n').filter((l) => l.trim().length > 0);
+  // Newest-first: iterate from the tail. Skip `offset` rows before
+  // collecting up to `cap` rows. Caller asks for `cap + 1` to derive
+  // hasMore on its side (see src/main/ipc/bots.ts#BOTS_RUNS).
   const out: RunRecord[] = [];
+  let skipped = 0;
   for (let i = lines.length - 1; i >= 0 && out.length < cap; i--) {
     try {
-      out.push(JSON.parse(lines[i]) as RunRecord);
+      const row = JSON.parse(lines[i]) as RunRecord;
+      if (skipped < skip) {
+        skipped++;
+        continue;
+      }
+      out.push(row);
     } catch { /* skip malformed */ }
   }
   return out;

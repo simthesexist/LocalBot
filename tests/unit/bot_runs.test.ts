@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 const require_ = createRequire(import.meta.url);
 const runs = require_('../../daemon/runs/jsonl.cjs') as {
   appendRun: (userDataDir: string, bot: string, record: Record<string, unknown>) => Promise<void>;
-  listRuns: (userDataDir: string, bot: string, limit?: number) => Promise<Array<Record<string, unknown>>>;
+  listRuns: (userDataDir: string, bot: string, limit?: number, offset?: number) => Promise<Array<Record<string, unknown>>>;
 };
 
 function mkTmp(): string {
@@ -94,6 +94,28 @@ describe('listRuns — newest-first reader', () => {
       const rows = await runs.listRuns(dir, 'lim', 2);
       expect(rows.length).toBe(2);
       expect(rows.map((r) => r.runId)).toEqual(['r4', 'r3']);
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('supports offset parameter (skip newest N rows then return next page)', async () => {
+    const dir = mkTmp();
+    try {
+      // Write 5 rows oldest-first so the newest-first tail is r4, r3, r2, r1, r0.
+      for (let i = 0; i < 5; i++) {
+        await runs.appendRun(dir, 'off', { ts: `t${i}`, runId: `r${i}`, trigger: 'manual', durationMs: 0, exitReason: 'completed', messageCount: 1 });
+      }
+      // Skip 1 row (r4) then return 2 (r3, r2).
+      const rows = await runs.listRuns(dir, 'off', 2, 1);
+      expect(rows.length).toBe(2);
+      expect(rows.map((r) => r.runId)).toEqual(['r3', 'r2']);
+      // offset=2 → r2, r1
+      const rows2 = await runs.listRuns(dir, 'off', 2, 2);
+      expect(rows2.map((r) => r.runId)).toEqual(['r2', 'r1']);
+      // offset past the end → empty.
+      const rows3 = await runs.listRuns(dir, 'off', 2, 100);
+      expect(rows3).toEqual([]);
     } finally {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
     }
