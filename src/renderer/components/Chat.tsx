@@ -24,6 +24,8 @@ export interface ChatProps {
   initialMessages: ChatMessage[];
   initialBots?: BotConfig[];
   workspaceRoot?: string;
+  // Phase 4 Wave 3: opens BotSettingsPage via the App-level view setter.
+  onOpenSettings?: (botId: string) => void;
 }
 
 function blocksForMessage(m: ChatMessage): MessageBlockT[] {
@@ -32,7 +34,7 @@ function blocksForMessage(m: ChatMessage): MessageBlockT[] {
   return [{ kind: 'text', text: m.content ?? '' }];
 }
 
-export function Chat({ initialMessages, initialBots, workspaceRoot = '.' }: ChatProps) {
+export function Chat({ initialMessages, initialBots, workspaceRoot = '.', onOpenSettings }: ChatProps) {
   const {
     messages,
     streaming,
@@ -105,7 +107,7 @@ export function Chat({ initialMessages, initialBots, workspaceRoot = '.' }: Chat
       </header>
 
       <div className="chat-body">
-        <BotSidebar initialBots={initialBots} />
+        <BotSidebar initialBots={initialBots} onOpenSettings={onOpenSettings} />
         {daemonStatus.state !== 'ready' && (
           <ErrorBanner
             variant="daemon"

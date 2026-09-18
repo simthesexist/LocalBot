@@ -1,16 +1,45 @@
 // Top-level App.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AppInitPayload, BotConfig } from '../shared/types';
 import { Chat } from './components/Chat';
 import { KeyModal } from './components/KeyModal';
+import { BotSettingsPage } from './components/BotSettingsPage';
+import { useBots } from './state/bots';
 
 export function App() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [initialMessages, setInitialMessages] = useState<any[] | null>(null);
   const [initialBots, setInitialBots] = useState<BotConfig[]>([]);
-  // Reserved for Wave 3's settings page. Wave 1 always renders Chat.
-  const [view] = useState<'chat' | 'settings'>('chat');
+  // Phase 4 Wave 3: view toggle 'chat' | 'settings' + settingsBotId.
+  // Driven by URL hash so refresh preserves the open settings page.
+  const [view, setView] = useState<'chat' | 'settings'>('chat');
+  const [settingsBotId, setSettingsBotId] = useState<string | null>(null);
+
+  // Bot store hook — needed to look up the BotConfig object by id when
+  // the settings page mounts.
+  const { bots } = useBots();
+
+  // URL hash sync: restore view + botId from hash on first mount; keep
+  // hash in sync on every transition. Hashes:
+  //   '' or '#/' → chat
+  //   '#/bot/<id>/settings[/<tab>]' → settings for that bot.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => {
+      const hash = window.location.hash;
+      const m = hash.match(/^#\/bot\/([^/]+)\/settings(?:\/([^/]+))?$/);
+      if (m) {
+        setSettingsBotId(m[1]);
+        setView('settings');
+      } else {
+        setView('chat');
+      }
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
 
   useEffect(() => {
     if (!window.localbot) return;
@@ -29,6 +58,24 @@ export function App() {
     return off;
   }, []);
 
+  const openSettings = useCallback((botId: string) => {
+    setSettingsBotId(botId);
+    setView('settings');
+  }, []);
+
+  const closeSettings = useCallback(() => {
+    setView('chat');
+    setSettingsBotId(null);
+    if (typeof window !== 'undefined' && window.location.hash.startsWith('#/bot/')) {
+      window.history.replaceState(null, '', '#/');
+    }
+  }, []);
+
+  const settingsBot = useMemo(
+    () => bots.find((b) => b.id === settingsBotId) ?? initialBots.find((b) => b.id === settingsBotId) ?? null,
+    [bots, initialBots, settingsBotId],
+  );
+
   if (hasKey === null) {
     return <div className="boot">Loading…</div>;
   }
@@ -37,10 +84,14 @@ export function App() {
     return <KeyModal onSaved={() => setHasKey(true)} />;
   }
 
-  // Wave 1 always renders Chat. Wave 3 swaps in a BotSettingsPage
-  // when `view === 'settings'` without re-architecting this branch.
-  if (view === 'chat') {
-    return <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} />;
+  if (view === 'settings' && settingsBot) {
+    return (
+      <BotSettingsPage
+        bot={settingsBot}
+        onClose={closeSettings}
+        onUpdated={() => { /* BotSettingsPage reads fresh bot via bots.find */ }}
+      />
+    );
   }
-  return <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} />;
+  return <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} onOpenSettings={openSettings} />;
 }
