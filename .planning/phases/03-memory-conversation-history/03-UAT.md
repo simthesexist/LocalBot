@@ -33,13 +33,12 @@ severity: minor (downstream — out of scope for memory-pill-missing session)
 ## Summary
 
 total: 3
-passed: 0 (full assertions)
+passed: 1 (MemoryPill + WorkspaceTree render and chat turn — full assertions)
 mount_resolved: 3/3 (all 3 tests now get past the renderer-mount assertions)
-daemon_blocked: 3/3 (all 3 tests now blocked downstream by daemon-not-initialized)
-issues: 1 (daemon-not-initialized in headed test env — separate debug session needed)
+issues: 2 (1. missing `window.localbot.invoke` in preload for SessionSwitcher generic IPC. 2. DiffView + chokidar watcher path is flaky on Windows headed.)
 pending: 0
 skipped: 0
-blocked: 3
+blocked: 2 (SessionSwitcher + DiffView — separate gaps unrelated to daemon bootstrap)
 
 renderer_mount_root_cause: resolved (preload path corrected in src/main/window.ts:72 — commit a326c98)
 
@@ -93,16 +92,15 @@ renderer_mount_root_cause: resolved (preload path corrected in src/main/window.t
 
 - gap_id: G-3-4
   truth: "Headed Electron can stream a chat turn end-to-end (LLM response + tool calls + result rendering)"
-  status: open
-  reason: "Downstream gap surfaced after G-3-1/G-3-2/G-3-3 were resolved. The renderer's `status` banner reads 'Tool daemon stopped responding' and an `alert` element shows 'daemon not initialized'. src/main/daemon/spawn.ts:14 keeps `initialized` false through the entire headed test session, so every RPC throws 'daemon not initialized' (lines 72, 148, 194). The chat handler's streaming-response path depends on daemon tool calls; without initialization no assistant bubble ever mounts, no edit_file tool_use fires, no DiffView mounts."
-  severity: major
-  test: all
+  status: resolved
+  reason: "Root cause: `spawnDaemon()` opened two `readline.createInterface()` instances on the same daemon stdout pipe, causing the OS pipe to buffer subsequent NDJSON lines until writer exit (~30s delay, exactly matching Playwright's launch SIGTERM). Plus the spawned Electron binary needed `ELECTRON_RUN_AS_NODE=1` in the child env to run `daemon/main.cjs` as a Node script (instead of launching a fresh Electron GUI app). Plus the `sendRequest` `initialized`-gate was a chicken-and-egg block against the first `initialize` request. MemoryPill + WorkspaceTree + chat-stream test (memory-history.test.ts:78) now passes in 1.6s after the fix."
+  severity: resolved
+  test: 1
   artifacts:
     - path: "src/main/daemon/spawn.ts"
-      issue: "Handshake from main → daemon sets `initialized = true` after the daemon emits a ready signal. Either the ready signal is not arriving in headed Electron mode (timeout?), or main is not registering the handler before the daemon emits it."
-    - path: "tests/playwright/memory-history.test.ts:90-100"
-      issue: "env block passed to electron.launch sets M3_API_BASE / M3_MODEL / LOCALBOT_USER_DATA_DIR / LOCALBOT_WORKSPACE_ROOT / LOCALBOT_SOFT_CAP_TOKENS / ELECTRON_DISABLE_SANDBOX. Compare with daemon-only test env (tests/playwright/daemon-tools.test.ts) to see if headed is missing a flag the daemon needs to spawn cleanly (e.g. ELECTRON_RUN_AS_NODE=1 in unit tests but not in headed?)."
-  missing:
-    - "Confirm daemon initialized handshake path under headed Electron. Likely candidates: (1) daemon subprocess spawn timeout under ELECTRON_DISABLE_SANDBOX, (2) main process never pipes the daemon's stdout 'ready' message to the IPC handler, (3) the daemon's first stdout chunk arrives before main has registered its handler."
-  debug_session: null (new — open /gsd-debug daemon-spawn-headed)
+      issue: "FIXED — refactored `attachLineReader()` to return the `readline.Interface` it creates and added a `__markReady()` hook that flips a gate and replays pre-handshake buffered lines; `spawnDaemon()` now reuses that single readline for the ready handshake + steady-state dispatch. Added `ELECTRON_RUN_AS_NODE: '1'` to the spawn child env. Added a `bypassInitCheck` flag on `sendRequest` so the first `initialize` can flow through the gate before `initialized` flips true."
+    - path: "daemon/main.cjs"
+      issue: "CLEANUP — removed the temporary `dbg()` debug-logging harness added during investigation."
+  missing: []
+  debug_session: ".planning/debug/resolved/daemon-spawn-headed.md"
 ```

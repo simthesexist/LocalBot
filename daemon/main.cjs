@@ -144,7 +144,8 @@ rl.on('line', async (line) => {
           activeWatcher.start();
         }
 
-        replyResult(id, { ...SERVER_INFO, tools: registry.listTools() });
+        const tools = registry.listTools();
+        replyResult(id, { ...SERVER_INFO, tools });
         break;
       }
 

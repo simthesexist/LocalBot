@@ -38,9 +38,16 @@ function rejectAllPending(reason: string): void {
   pending.clear();
 }
 
-async function sendRequest(req: JsonRpcRequest): Promise<JsonRpcResponse> {
-  if (!daemonProc || !daemonProc.stdin || initialized === false) {
+async function sendRequest(req: JsonRpcRequest, opts: { bypassInitCheck?: boolean } = {}): Promise<JsonRpcResponse> {
+  if (!daemonProc || !daemonProc.stdin) {
     throw new Error('daemon not ready');
+  }
+  // The initialize handshake is the first request we send; `initialized`
+  // is only flipped to true AFTER the daemon ACKs initialize, so this
+  // single call needs to bypass the gate. All subsequent callTool /
+  // callMemory / callTree requests must go through the normal gate.
+  if (!opts.bypassInitCheck && initialized === false) {
+    throw new Error('daemon not initialized');
   }
   return new Promise<JsonRpcResponse>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -48,7 +55,12 @@ async function sendRequest(req: JsonRpcRequest): Promise<JsonRpcResponse> {
       reject(new Error(`daemon request timed out after ${TOOL_CALL_TIMEOUT_MS}ms`));
     }, TOOL_CALL_TIMEOUT_MS);
     pending.set(req.id, { resolve, reject, timeout });
-    writeMessage(daemonProc!.stdin!, req);
+    try {
+      writeMessage(daemonProc!.stdin!, req);
+    } catch (e) {
+      pending.delete(req.id);
+      reject(e as Error);
+    }
   });
 }
 
@@ -230,34 +242,62 @@ export async function callTree(
   }
 }
 
-function attachLineReader(proc: ChildProcess): void {
-  if (!proc.stdout) return;
+function attachLineReader(proc: ChildProcess): readline.Interface {
+  if (!proc.stdout) {
+    throw new Error('daemon stdout not available');
+  }
   const rl = readline.createInterface({ input: proc.stdout as NodeJS.ReadableStream });
+  // Pre-handshake buffer: lines that arrive BEFORE ready resolves must be
+  // dispatched to the pending/notifications map after ready, because the
+  // bridge only sets up `pending` entries once it has decided to talk to the
+  // daemon. We buffer raw NDJSON lines (strings) so we can replay them
+  // unchanged — `readMessage` is pure JSON.parse so re-running it is safe.
+  const preReadyBuffer: string[] = [];
+  let readyResolved = false;
   rl.on('line', (line) => {
-    const obj = readMessage(line);
-    if (!obj) return;
-    const id = (obj as any).id;
-    if (typeof id === 'number' && pending.has(id)) {
-      const p = pending.get(id)!;
-      pending.delete(id);
-      clearTimeout(p.timeout);
-      p.resolve(obj);
+    if (!readyResolved) {
+      preReadyBuffer.push(line);
       return;
     }
-    // Phase 3 Wave 2: notifications from the daemon (no `id`, but `method`).
-    // The line reader in protocol.cjs tolerates extra fields; dispatch to
-    // any listeners registered via onNotification().
-    const method = (obj as { method?: unknown }).method;
-    if (typeof method === 'string') {
-      const set = notificationListeners.get(method);
-      if (set && set.size > 0) {
-        const params = (obj as { params?: unknown }).params;
-        for (const cb of Array.from(set)) {
-          try { cb(params); } catch { /* listener errors must not break the bridge */ }
-        }
+    dispatchLine(line);
+  });
+  // Mark ready once the handshake resolves; replay any buffered line that
+  // arrived before ready (e.g. an unsolicited notification fired during the
+  // handshake window).
+  (rl as readline.Interface & { __markReady: () => void }).__markReady = () => {
+    readyResolved = true;
+    while (preReadyBuffer.length > 0) {
+      const line = preReadyBuffer.shift()!;
+      dispatchLine(line);
+    }
+  };
+  return rl;
+}
+
+function dispatchLine(line: string): void {
+  const obj = readMessage(line);
+  if (!obj) return;
+  const id = (obj as any).id;
+  if (typeof id === 'number' && pending.has(id)) {
+    const p = pending.get(id)!;
+    pending.delete(id);
+    clearTimeout(p.timeout);
+    p.resolve(obj);
+    return;
+  }
+  // Phase 3 Wave 2: notifications from the daemon (no `id`, but `method`).
+  // The line reader in protocol.cjs tolerates extra fields; dispatch to
+  // any listeners registered via onNotification().
+  const method = (obj as { method?: unknown }).method;
+  if (typeof method === 'string') {
+    const set = notificationListeners.get(method);
+    if (set && set.size > 0) {
+      const params = (obj as { params?: unknown }).params;
+      for (const cb of Array.from(set)) {
+        try { cb(params); } catch { /* listener errors must not break the bridge */ }
       }
     }
-  });
+  }
 }
 
 /**
@@ -315,16 +355,22 @@ export async function spawnDaemon(): Promise<void> {
   initialized = false;
 
   const entry = resolveDaemonEntry(app.getAppPath());
+  // process.execPath inside Electron's main process is the Electron binary
+  // (not node.exe). ELECTRON_RUN_AS_NODE=1 in the child env makes the child
+  // behave as plain Node so it executes `entry` as a script. Without this
+  // flag, the spawned binary launches a new Electron GUI app and ignores
+  // the script arg — the ready handshake never fires and `initialized`
+  // stays false (root cause of G-3-4).
   const proc = spawn(process.execPath, [entry], {
     stdio: ['pipe', 'pipe', 'inherit'],
-    env: { ...process.env },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
   });
   daemonProc = proc as ChildProcess;
 
-  proc.on('exit', (code) => {
+  proc.on('exit', (code, signal) => {
     initialized = false;
     daemonProc = null;
-    rejectAllPending(`daemon exited with code ${code ?? 'null'}`);
+    rejectAllPending(`daemon exited with code ${code ?? 'null'} signal=${signal ?? 'null'}`);
     if (!intentionalStop) {
       scheduleRespawn();
     }
@@ -341,20 +387,23 @@ export async function spawnDaemon(): Promise<void> {
     });
   });
 
-  attachLineReader(daemonProc);
+  // Wire a SINGLE readline interface on the daemon's stdout. The previous
+  // version created TWO readlines (one for the ready handshake, one for
+  // ongoing traffic) which, under Electron's Windows pipe semantics, caused
+  // the second and subsequent lines to be buffered until process exit — the
+  // G-3-4 root cause. We now use one readline, buffer pre-ready lines into
+  // attachLineReader's __markReady queue, and dispatch them once the
+  // handshake resolves.
+  const rl = attachLineReader(daemonProc);
 
-  // Wait for the first line: {"kind":"ready"}.
+  // Wait for the first line: {"kind":"ready"}. We watch the readline
+  // interface directly (instead of opening a second readline) so there is
+  // exactly one consumer on the stdout pipe.
   const ready = await new Promise<boolean>((resolve) => {
-    if (!daemonProc?.stdout) {
-      resolve(false);
-      return;
-    }
-    const rl = readline.createInterface({ input: daemonProc.stdout as NodeJS.ReadableStream });
     const onLine = (line: string) => {
       const obj = readMessage(line);
       if (obj && (obj as any).kind === 'ready') {
         rl.removeListener('line', onLine);
-        rl.close();
         resolve(true);
       }
     };
@@ -362,7 +411,6 @@ export async function spawnDaemon(): Promise<void> {
     // Hard timeout: 10s
     setTimeout(() => {
       rl.removeListener('line', onLine);
-      rl.close();
       resolve(false);
     }, 10_000);
   });
@@ -375,6 +423,11 @@ export async function spawnDaemon(): Promise<void> {
     scheduleRespawn();
     return;
   }
+
+  // Bridge is now hot — flip ready-resolved so any buffered lines (e.g. an
+  // unsolicited tree:refresh notification fired during the handshake) get
+  // dispatched to the pending/notifications map.
+  (rl as readline.Interface & { __markReady: () => void }).__markReady();
 
   // Send initialize. Phase 2: include workspaceRoot so the daemon's
   // safe_path can resolve paths against the bot workspace. Lazy-create the
@@ -405,7 +458,7 @@ export async function spawnDaemon(): Promise<void> {
     },
   };
   try {
-    const resp = await sendRequest(initReq);
+    const resp = await sendRequest(initReq, { bypassInitCheck: true });
     if ((resp as any).error) {
       throw new Error(`initialize error: ${(resp as any).error.message}`);
     }
