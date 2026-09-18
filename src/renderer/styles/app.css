@@ -925,3 +925,295 @@ html, body, #root {
   text-align: center;
   border-bottom: 1px solid #bfdbfe;
 }
+
+/* ─── Phase 4 Wave 1: bot sidebar + status dots + modal stack. ─── */
+
+:root {
+  --lb-status-idle: #9ca3af;
+  --lb-status-running: #22c55e;
+  --lb-status-errored: #ef4444;
+  --lb-status-scheduled: #3b82f6;
+}
+
+.bot-sidebar {
+  width: 260px;
+  background: var(--lb-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.bot-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+}
+
+.bot-sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.bot-sidebar-add {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--color-text);
+}
+
+.bot-sidebar-add:hover {
+  background: var(--lb-tree-hover);
+}
+
+.bot-sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bot-sidebar-empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  padding: 8px;
+  font-style: italic;
+}
+
+.bot-sidebar-error {
+  font-size: 12px;
+  color: var(--color-error-text);
+  padding: 4px 8px;
+  background: var(--color-error-bg);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+.bot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.bot-row[aria-current="true"] {
+  background: var(--lb-pill-bg);
+}
+
+.bot-row:hover {
+  background: var(--lb-tree-hover);
+}
+
+.bot-row-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.bot-row-status[data-status="idle"] {
+  background: var(--lb-status-idle);
+}
+
+.bot-row-status[data-status="running"] {
+  background: var(--lb-status-running);
+  animation: lb-pulse 1.4s ease-in-out infinite;
+}
+
+.bot-row-status[data-status="errored"] {
+  background: var(--lb-status-errored);
+}
+
+.bot-row-status[data-status="scheduled"] {
+  background: var(--lb-status-scheduled);
+}
+
+@keyframes lb-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.bot-row-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bot-row-lastrun {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex: 0 0 auto;
+}
+
+.bot-row-actions {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.bot-row-settings,
+.bot-row-delete {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  border-radius: 3px;
+}
+
+.bot-row-settings:hover,
+.bot-row-delete:hover {
+  background: var(--lb-tree-hover);
+  color: var(--color-text);
+}
+
+.bot-row-delete:hover {
+  color: var(--color-error-text);
+}
+
+/* ─── Phase 4 Wave 1: generic AppModal primitive. ─── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  background: var(--color-bg, #ffffff);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 360px;
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.modal-close:hover {
+  background: var(--lb-tree-hover);
+  color: var(--color-text);
+}
+
+.modal-error {
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+/* ─── Phase 4 Wave 1: NewBotModal-specific. ─── */
+
+.new-bot-modal .modal-card,
+.new-bot-modal {
+  /* card class is applied to .modal-card; nothing extra for now */
+}
+
+.new-bot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  display: block;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.form-fieldset {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.form-fieldset legend {
+  font-size: 12px;
+  padding: 0 4px;
+  color: var(--color-text-muted);
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+/* ─── Phase 4 Wave 1: DeleteConfirmModal-specific. ─── */
+
+.delete-confirm-modal p {
+  margin: 0 0 12px 0;
+}
+
+.delete-confirm-modal code {
+  background: var(--lb-tree-hover);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+}
+
+.destructive {
+  background: var(--color-stop-bg, #ef4444);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.destructive:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.destructive:hover:not(:disabled) {
+  background: #dc2626;
+}

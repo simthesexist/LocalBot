@@ -17,6 +17,9 @@ const EVENT_CHANNELS = new Set<string>([
   CHANNELS.EVENT_MEMORY_UPDATED,
   CHANNELS.EVENT_HISTORY_LOADED,
   CHANNELS.EVENT_HISTORY_APPENDED,
+  // Phase 4 Wave 1 channels:
+  CHANNELS.EVENT_BOT_LIST_UPDATED,
+  CHANNELS.EVENT_BOT_STATUS,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {
@@ -46,6 +49,11 @@ const api: LocalbotApi = {
   },
   tree: {
     list: (req) => ipcRenderer.invoke(CHANNELS.TREE_LIST, req),
+  },
+  bot: {
+    list: () => ipcRenderer.invoke(CHANNELS.BOTS_LIST),
+    create: (req) => ipcRenderer.invoke(CHANNELS.BOTS_CREATE, req),
+    delete: (req) => ipcRenderer.invoke(CHANNELS.BOTS_DELETE, req),
   },
   // One-way: renderer asks main to re-send EVENT_APP_INIT. Used in App.tsx
   // after the app:init listener is registered to close the

@@ -133,6 +133,14 @@ export interface AppInitPayload {
   hasKey: boolean;
   messages: ChatMessage[];
   headSummary: SummaryRecord | null;
+  /**
+   * Phase 4 Wave 1: bot list shipped with the first paint so the renderer's
+   * sidebar hydrates synchronously. `bots` defaults to `[]` when the daemon
+   * hasn't finished its initialize handshake yet — the renderer's own
+   * `useBots().refresh()` reconciles via `EVENT_BOT_LIST_UPDATED` once
+   * the daemon reports ready.
+   */
+  bots?: BotConfig[];
 }
 
 export interface DaemonStatus {
@@ -235,4 +243,78 @@ export interface MemoryUpdatedEvent {
 export interface HistoryLoadedEvent {
   bot: string;
   sessionId: string;
+}
+
+// ─── Phase 4 Wave 1: bot metadata CRUD + sidebar. ─────────────────────────
+
+/**
+ * Per-bot lifecycle status. The daemon emits `EVENT_BOT_STATUS` to flip a
+ * bot between these states during manual/cron runs. Wave 1 bots are
+ * created with status='idle'; Wave 2 introduces the running / cancelled
+ * transitions via bots/trigger + bots/cancel.
+ */
+export type BotStatus = 'idle' | 'running' | 'errored' | 'scheduled';
+
+/**
+ * Source of truth for a bot's metadata. Mirrors `<userData>/bots/<id>/config.json`.
+ * The renderer treats this as the canonical display record; the daemon
+ * treats `allowlist` as the per-bot policy source (SEC-02).
+ */
+export interface BotConfig {
+  id: string;
+  name: string;
+  persona: string;
+  workspace: string;
+  allowlist: string[];
+  cron?: string;
+  cronEnabled?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  status: BotStatus;
+  lastRunAt?: string;
+  lastRunExitReason?: 'completed' | 'cancelled' | 'errored';
+  lastRunError?: string;
+  schemaVersion: 1;
+}
+
+export interface BotListResult {
+  ok: boolean;
+  bots: BotConfig[];
+  error?: string;
+}
+
+export interface BotCreateRequest {
+  id?: string;
+  name: string;
+  persona: string;
+  workspace: string;
+  allowlist: string[];
+  cron?: string;
+  cronEnabled?: boolean;
+}
+
+export interface BotCreateResult {
+  ok: boolean;
+  bot?: BotConfig;
+  error?: string;
+}
+
+export interface BotDeleteRequest {
+  bot: string;
+}
+
+export interface BotDeleteResult {
+  ok: boolean;
+  error?: string;
+}
+
+export interface BotListUpdatedEvent {
+  reason: 'create' | 'update' | 'delete';
+  bot?: string;
+}
+
+export interface BotStatusEvent {
+  bot: string;
+  status: BotStatus;
+  runId?: string;
 }

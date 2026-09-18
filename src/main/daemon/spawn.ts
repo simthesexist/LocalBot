@@ -301,6 +301,59 @@ function dispatchLine(line: string): void {
 }
 
 /**
+ * Phase 4 Wave 1: invoke the daemon's `bots/<method>` JSON-RPC methods.
+ * The daemon exposes `bots/list`, `bots/create`, `bots/delete` as
+ * top-level methods that bypass the per-bot tool allowlist (they ARE
+ * the per-bot metadata CRUD). Returns the raw `{result}` payload —
+ * callers do their own shape checks so the wire codes surface as
+ * `{ok:false, error}` in the renderer without a translate step.
+ */
+export async function callBot(
+  method: 'bots/list' | 'bots/create' | 'bots/delete',
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  if (!initialized) throw new Error('daemon not initialized');
+  const id = nextId++;
+  // bots/delete scopes the audit by the bot being deleted; the other two
+  // use the implicit `default` bot for the audit line (the caller is
+  // main, not an LLM-driven tool call).
+  const bot = (typeof (args as { bot?: string }).bot === 'string')
+    ? (args as { bot: string }).bot
+    : 'default';
+  const startedAt = Date.now();
+  try {
+    const resp = await sendRequest({
+      jsonrpc: '2.0',
+      id,
+      method,
+      params: args,
+    });
+    const durationMs = Date.now() - startedAt;
+    const err = (resp as { error?: { code?: unknown; message?: unknown } }).error;
+    await appendAuditLine({
+      bot,
+      tool: method,
+      params: args,
+      outcome: err ? 'error' : 'ok',
+      durationMs,
+      error: err ? { code: String(err.code ?? 'unknown'), message: String(err.message ?? '') } : undefined,
+    });
+    return (resp as { result?: unknown }).result ?? resp;
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    await appendAuditLine({
+      bot,
+      tool: method,
+      params: args,
+      outcome: 'error',
+      durationMs,
+      error: { code: 'daemon_unreachable', message: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+/**
  * Subscribe to a daemon-emitted notification channel (e.g. `tree:refresh`).
  * Returns an unsubscribe function. Listeners are called synchronously from
  * the line-reader tick; throws are swallowed so one bad listener does not

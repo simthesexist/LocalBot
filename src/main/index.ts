@@ -7,6 +7,7 @@ import { registerChatHandlers } from './ipc/chat';
 import { registerHistoryHandlers } from './ipc/history';
 import { registerMemoryHandlers } from './ipc/memory';
 import { registerTreeHandlers } from './ipc/tree';
+import { registerBotHandlers } from './ipc/bots';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs } from './paths';
 import { appendAuditLine } from './audit/logger';
@@ -49,6 +50,7 @@ void app.whenReady().then(async () => {
   registerHistoryHandlers();
   registerMemoryHandlers();
   registerTreeHandlers();
+  registerBotHandlers();
 
   createMainWindow();
 

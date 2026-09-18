@@ -7,6 +7,7 @@ import { appendAuditLine } from './audit/logger';
 import { CHANNELS } from '../shared/ipc-channels';
 import { hasStoredKey } from './ipc/key';
 import { loadSession } from './sessions/jsonl';
+import { listBotsFromDisk } from './bots/config';
 
 // Per-window app:init trigger so the renderer can ASK main to re-send the
 // payload after its React useEffect has registered the listener. This
@@ -89,16 +90,32 @@ export function createMainWindow(): BrowserWindow {
   // handler above). The `did-finish-load` send is kept as the primary path;
   // the pull-request path is a backstop for the case where React's
   // useEffect registers the listener after main already sent.
+  //
+  // Phase 4 Wave 1: also ship the canonical bot list so the sidebar can
+  // hydrate synchronously without an extra IPC roundtrip. `bots` defaults
+  // to `[]` on any failure so a corrupt user-data tree can't blank the
+  // first paint — the renderer's own useBots().refresh() reconciles via
+  // EVENT_BOT_LIST_UPDATED once the daemon reports ready.
   const sendAppInit = async () => {
     try {
-      const [hasKey, session] = await Promise.all([hasStoredKey(), loadSession('default')]);
+      const [hasKey, session, bots] = await Promise.all([
+        hasStoredKey(),
+        loadSession('default'),
+        listBotsFromDisk(),
+      ]);
       win.webContents.send(CHANNELS.EVENT_APP_INIT, {
         hasKey,
         messages: session.messages,
         headSummary: session.headSummary,
+        bots,
       });
-    } catch (err) {
-      win.webContents.send(CHANNELS.EVENT_APP_INIT, { hasKey: false, messages: [], headSummary: null });
+    } catch {
+      win.webContents.send(CHANNELS.EVENT_APP_INIT, {
+        hasKey: false,
+        messages: [],
+        headSummary: null,
+        bots: [],
+      });
     }
   };
   appInitTriggers.set(win.webContents.id, sendAppInit);

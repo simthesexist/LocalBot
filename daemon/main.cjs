@@ -2,10 +2,12 @@
 
 const readline = require('node:readline');
 const path = require('node:path');
+const fs = require('node:fs');
 const { writeMessage, readMessage } = require('./protocol.cjs');
 const registry = require('./tools/registry.cjs');
 const audit = require('./audit.cjs');
 const { createWatcher } = require('./watcher.cjs');
+const botLoader = require('./bots/loader.cjs');
 
 // Phase 2: per-bot policy lives in the daemon; the orchestrator (main)
 // forwards params.bot on initialize and params.bot on every tools/call.
@@ -86,6 +88,10 @@ const rl = readline.createInterface({ input: process.stdin });
 let workspaceRoot = null;
 let currentBot = 'default';
 let botDir = null; // Phase 3: <userData>/bots/<bot>; threaded into memory_read/write ctx
+// Phase 4: userDataDir is the root of all bot/audit/session JSONL files.
+// Latched from initialize.params.userDataDir; bots/* handlers read it to
+// locate <userData>/bots/<bot>/config.json.
+let userDataDirState = null;
 
 rl.on('line', async (line) => {
   const obj = readMessage(line);
@@ -101,6 +107,7 @@ rl.on('line', async (line) => {
       case 'initialize': {
         if (params && typeof params.userDataDir === 'string') {
           audit.setUserDataDir(params.userDataDir);
+          userDataDirState = params.userDataDir;
         }
         if (params && typeof params.workspaceRoot === 'string') {
           workspaceRoot = params.workspaceRoot;
@@ -332,6 +339,149 @@ rl.on('line', async (line) => {
             error: { code: err.code || 'tree_list_failed', message: err.message },
           });
           replyError(id, err.code || 'tree_list_failed', err.message);
+        }
+        break;
+      }
+
+      // Phase 4 Wave 1: bots/list, bots/create, bots/delete — JSON-RPC
+      // methods for per-bot metadata CRUD. All write a single audit line
+      // in the canonical {ts, bot, tool, params, outcome, durationMs,
+      // error?} shape (SEC-04). bots/create uses audit minimization
+      // (T-P4-10): the `params` field carries only {name, personaBytes},
+      // never the persona content or workspace path.
+      case 'bots/list': {
+        const startedAt = Date.now();
+        try {
+          const bots = botLoader.listAllBots(userDataDirState);
+          audit.appendAudit({
+            tool: 'bots.list',
+            bot: currentBot,
+            params: {},
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, bots });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'bots.list',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_list_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_list_failed', err.message);
+        }
+        break;
+      }
+
+      case 'bots/create': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) throw Object.assign(new Error('daemon not initialized'), { code: 'daemon_not_initialized' });
+          const p = params || {};
+          // Derive id from params.name when not provided; refuse bot_exists.
+          const botId = (typeof p.id === 'string' && p.id.length > 0)
+            ? botLoader.deriveSlug(p.id)
+            : botLoader.deriveSlug(String(p.name || ''));
+          if (botLoader.botExists(userDataDirState, botId)) {
+            throw Object.assign(new Error(`bot already exists: ${botId}`), { code: 'bot_exists' });
+          }
+          const cfg = {
+            id: botId,
+            name: typeof p.name === 'string' ? p.name : botId,
+            persona: typeof p.persona === 'string' ? p.persona : '',
+            workspace: typeof p.workspace === 'string' ? p.workspace : '',
+            allowlist: Array.isArray(p.allowlist) ? p.allowlist.slice() : [],
+            cron: typeof p.cron === 'string' && p.cron.length > 0 ? p.cron : undefined,
+            cronEnabled: typeof p.cronEnabled === 'boolean' ? p.cronEnabled : undefined,
+            schemaVersion: 1,
+            status: 'idle',
+          };
+          const written = botLoader.writeConfig(userDataDirState, botId, cfg);
+
+          // Side effect: seed memory.md + facts.json stubs so the bot has
+          // the Phase 3 surfaces ready before any LLM-driven memory.update.
+          const botDirPath = path.join(userDataDirState, 'bots', botId);
+          const memoryPath = path.join(botDirPath, 'memory.md');
+          const factsPath = path.join(botDirPath, 'facts.json');
+          if (!fs.existsSync(memoryPath)) {
+            fs.writeFileSync(memoryPath, '', 'utf8');
+          }
+          if (!fs.existsSync(factsPath)) {
+            fs.writeFileSync(factsPath, '{}', 'utf8');
+          }
+
+          // Audit minimization (T-P4-10): only record name + persona byte
+          // count — never the persona content or workspace path.
+          const personaBytes = Buffer.byteLength(written.persona || '', 'utf8');
+          audit.appendAudit({
+            tool: 'bots.create',
+            bot: botId,
+            params: { name: written.name, personaBytes },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, bot: written });
+        } catch (err) {
+          // Audit on failure still keeps the params minimization pattern.
+          const personaBytes = (params && typeof params.persona === 'string')
+            ? Buffer.byteLength(params.persona, 'utf8')
+            : 0;
+          audit.appendAudit({
+            tool: 'bots.create',
+            bot: (params && typeof params.id === 'string') ? params.id : (params && typeof params.name === 'string' ? params.name : currentBot),
+            params: { name: params && typeof params.name === 'string' ? params.name : '', personaBytes },
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_create_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_create_failed', err.message);
+        }
+        break;
+      }
+
+      case 'bots/delete': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) throw Object.assign(new Error('daemon not initialized'), { code: 'daemon_not_initialized' });
+          const p = params || {};
+          const botId = typeof p.bot === 'string' ? p.bot : '';
+          if (botId.length === 0) {
+            throw Object.assign(new Error('bot id required'), { code: 'invalid_id' });
+          }
+          // T-P4-05: protect the implicit `default` bot — Phase 3 data
+          // would be lost if a renderer-driven delete succeeded.
+          if (botId === 'default') {
+            throw Object.assign(new Error('cannot delete the implicit default bot'), { code: 'protected_bot' });
+          }
+          botLoader.deleteBot(userDataDirState, botId);
+
+          // Best-effort: remove the per-bot sessions directory.
+          // The runs JSONL removal is Wave 2's responsibility (the runs
+          // writer doesn't exist yet — appendRun lands with the trigger
+          // flow in Plan 04-02).
+          const sessionsPath = path.join(userDataDirState, 'sessions', botId);
+          try { fs.rmSync(sessionsPath, { recursive: true, force: true }); } catch { /* ignore */ }
+
+          audit.appendAudit({
+            tool: 'bots.delete',
+            bot: botId,
+            params: {},
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'bots.delete',
+            bot: (params && typeof params.bot === 'string') ? params.bot : currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'bots_delete_failed', message: err.message },
+          });
+          replyError(id, err.code || 'bots_delete_failed', err.message);
         }
         break;
       }

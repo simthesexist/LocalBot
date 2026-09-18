@@ -4,6 +4,13 @@
 
 import type {
   AppInitPayload,
+  BotCreateRequest,
+  BotCreateResult,
+  BotDeleteRequest,
+  BotDeleteResult,
+  BotListResult,
+  BotListUpdatedEvent,
+  BotStatusEvent,
   DaemonStatus,
   DoneEvent,
   ErrorEvent,
@@ -37,7 +44,13 @@ export type LocalbotChannel =
   | 'tree:refresh'
   | 'memory:updated'
   | 'history:loaded'
-  | 'history:appended';
+  | 'history:appended'
+  // Phase 4 Wave 1 channels (invoke + events):
+  | 'bots:list'
+  | 'bots:create'
+  | 'bots:delete'
+  | 'bot:list:updated'
+  | 'bot:status';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -50,7 +63,9 @@ export type LocalbotEventPayload =
   | HistoryAppendedEvent
   | HistoryLoadedEvent
   | MemoryUpdatedEvent
-  | TreeRefreshEvent;
+  | TreeRefreshEvent
+  | BotListUpdatedEvent
+  | BotStatusEvent;
 
 export interface LocalbotApi {
   sendMessage: (content: string, msgId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -70,6 +85,16 @@ export interface LocalbotApi {
   };
   tree: {
     list: (req: TreeListRequest) => Promise<TreeListResult>;
+  };
+  /**
+   * Phase 4 Wave 1: per-bot metadata CRUD. The renderer never touches the
+   * filesystem directly — every call routes through the daemon's
+   * bots/{list,create,delete} JSON-RPC methods via `src/main/ipc/bots.ts`.
+   */
+  bot: {
+    list: () => Promise<BotListResult>;
+    create: (req: BotCreateRequest) => Promise<BotCreateResult>;
+    delete: (req: BotDeleteRequest) => Promise<BotDeleteResult>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls
