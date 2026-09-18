@@ -208,12 +208,12 @@ describe('per-bot allowlist override', () => {
 
       // bot-a: write_file should be denied.
       await expect(
-        registry.callTool('bot-a', 'write_file', { path: 'a.txt', content: 'x' }, { workspaceRoot: ws }),
+        registry.callTool('bot-a', 'write_file', { path: 'a.txt', content: 'x' }, { workspaceRoot: ws, userDataDir: ws }),
       ).rejects.toMatchObject({ code: 'denied', reason: 'allowlist' });
 
       // bot-b: write_file should be allowed (filesystem write succeeds).
       const res = await registry.callTool(
-        'bot-b', 'write_file', { path: 'a.txt', content: 'ok' }, { workspaceRoot: ws },
+        'bot-b', 'write_file', { path: 'a.txt', content: 'ok' }, { workspaceRoot: ws, userDataDir: ws },
       );
       expect(res).toBeTruthy();
       expect(fs.readFileSync(path.join(ws, 'a.txt'), 'utf8')).toBe('ok');
@@ -239,7 +239,7 @@ describe('per-bot allowlist override', () => {
       });
       // Before update: write_file is allowed.
       await expect(
-        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'y' }, { workspaceRoot: ws }),
+        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'y' }, { workspaceRoot: ws, userDataDir: ws }),
       ).resolves.toBeTruthy();
 
       // Narrow the allowlist.
@@ -247,7 +247,7 @@ describe('per-bot allowlist override', () => {
 
       // After update: write_file is denied.
       await expect(
-        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'z' }, { workspaceRoot: ws }),
+        registry.callTool('narrow', 'write_file', { path: 'a.txt', content: 'z' }, { workspaceRoot: ws, userDataDir: ws }),
       ).rejects.toMatchObject({ code: 'denied', reason: 'allowlist' });
     } finally {
       try { fs.rmSync(ws, { recursive: true, force: true }); } catch { /* ignore */ }
