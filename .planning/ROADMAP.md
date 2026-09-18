@@ -73,7 +73,12 @@
   3. When the token budget is approached, the bot auto-summarizes older messages so the conversation can continue
   4. User can browse the bot's workspace (including memory file) in a tree view in the UI
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [ ] `03-01-PLAN.md` — Wave 1 *(tracer)*: daemon `memory_read`/`memory_write`/`list_tree` + `safe_path` containment; main `botDir`/`memoryPath`/`factsPath` + per-bot JSONL routing (`appendMessage`/`loadSession`/`migrateLegacyGlobalJsonl`) + `injectMemorySuffix` (≤4 KB cap, trims oldest H2) + `usageAccumulator` + `maybeSummarize`/`runSummarizer` (separate retry budget); renderer `MemoryPill` + `WorkspaceTree` placeholders; Playwright `memory-history.test.ts` end-to-end (fake M3 streams `usage.input_tokens: 100000`; legacy migration + head-of-JSONL summary + renderer reload).
+- [ ] `03-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: full UI per UI-SPEC — `DiffView` (`react-diff-viewer-continued` + binary placeholder), `MemoryPanel` (ARIA dialog + Escape + focus trap), `SummaryBlock`, `SessionSwitcher`; `chokidar` watcher with 250 ms debounce + `tree:refresh` IPC bridge; `childAbortController` for cancel mid-summarize; audit JSONL coverage for all 9 op names; full Wave 0 Vitest suites.
+- [ ] `03-03-PLAN.md` — Wave 3 *(blocked on Wave 2)*: `fake-m3-server.ts` extended with `streamEditFileToolUse` + `streamBinaryEditFile`; `memory-history.test.ts` extended with SessionSwitcher + restart-reload; new `tree-diff.test.ts` covering WorkspaceTree + DiffView + binary placeholder + chokidar refresh; visual polish + ARIA roles + final `npm ls` audit + commit.
+
 **UI hint**: yes
 
 ### Phase 4: Multi-Bot CRUD + Sidebar
