@@ -51,6 +51,19 @@ const api: LocalbotApi = {
   // after the app:init listener is registered to close the
   // did-finish-load vs React useEffect race window.
   requestAppInit: () => ipcRenderer.send(CHANNELS.REQUEST_APP_INIT),
+  // Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
+  // that callers (e.g. Playwright tests, future generic tools, ad-hoc dev
+  // console probing) can address any registered invoke-channel by name
+  // without the preload having to enumerate every handler. The typed
+  // namespace surface above (`history.*`, `memory.*`, `tree.*`, `key.*`,
+  // `sendMessage`, `cancel`) is preserved; this is purely additive.
+  // The `payload === undefined` branch keeps no-arg invokes (KEY_GET,
+  // KEY_CLEAR, CANCEL) from forwarding a literal `undefined` positional
+  // arg to the IPC handler.
+  invoke: (channel: LocalbotChannel | string, payload?: unknown) =>
+    payload === undefined
+      ? ipcRenderer.invoke(channel as string)
+      : ipcRenderer.invoke(channel as string, payload),
   on: ((channel: LocalbotChannel, handler: (payload: any) => void) => {
     return on(channel, handler);
   }) as LocalbotApi['on'],

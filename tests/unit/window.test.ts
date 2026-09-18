@@ -25,6 +25,11 @@ import path from 'node:path';
 vi.mock('electron', () => ({
   app: { getAppPath: () => '<unused — resolveRendererUrl takes builtIndexPath as a parameter>' },
   BrowserWindow: class {},
+  // window.ts registers an `ipcMain.on(REQUEST_APP_INIT, ...)` handler at
+  // module scope (see `app:init` request backstop). The unit test only
+  // exercises `resolveRendererUrl`, but importing window.ts side-effects
+  // through ipcMain — provide a stub so the import does not throw.
+  ipcMain: { on: () => undefined },
 }));
 
 // eslint-disable-next-line import/first

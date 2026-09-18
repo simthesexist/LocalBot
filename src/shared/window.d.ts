@@ -78,6 +78,14 @@ export interface LocalbotApi {
    * React `useEffect` that registers the listener cannot drop the event.
    */
   requestAppInit: () => void;
+  /**
+   * Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
+   * renderer code (and Playwright tests) can address any registered
+   * channel by name without the preload having to enumerate every
+   * handler. Mirrors the typed namespace surface above; the channel
+   * names must match `CHANNELS` in `src/shared/ipc-channels.ts`.
+   */
+  invoke: <T = unknown>(channel: LocalbotChannel | string, payload?: unknown) => Promise<T>;
   on: (channel: LocalbotChannel, handler: (payload: LocalbotEventPayload) => void) => () => void;
 }
 
