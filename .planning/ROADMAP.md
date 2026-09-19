@@ -6,7 +6,7 @@
 - [x] **Phase 2: File Tools + Search + Tool System** - read/write/edit/list/code_search via per-bot allowlisted tool daemon with inline UI blocks
 - [ ] **Phase 3: Memory + Conversation History** - Persistent markdown+JSON memory, JSONL history, token-budget summarization, workspace file tree
 - [ ] **Phase 4: Multi-Bot CRUD + Sidebar** - Create/list/edit/delete/run/cancel bots with sidebar, modals, settings, run history
-- [ ] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
+- [x] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
 - [ ] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
 - [ ] **Phase 7: Obsidian Integration** - Hybrid vault access (read-anywhere, write-agents-only) with glob enforcement + vault search
 - [ ] **Phase 8: Browser Automation** - Playwright-driven browser tools (navigate, click, type, fill, screenshot, evaluate)
