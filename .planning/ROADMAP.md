@@ -166,7 +166,7 @@ Plans:
 **Plans**: 3 plans
 
 - [x] `07-01-PLAN.md` — Wave 1 *(tracer)*: install `picomatch@^4`; new `daemon/vault/{config,glob,index}.cjs` (atomic <userData>/vault.json + picomatch wrapper + deny-wins pipeline); new `daemon/tools/{vault_read,vault_write}.cjs` (safe_path + glob filter + Agents/<bot>/ containment + tmp+rename atomic); extend `daemon/bots/loader.cjs` ALLOWED_CONFIG_KEYS with vaultPath/vaultAllow/vaultDeny + validateConfig guards; extend `daemon/tools/registry.cjs` TOOLS + SCHEMAS; extend `daemon/main.cjs` tools/call ctx with vaultRoot/globalDeny/vaultDeny/vaultAllow + new JSON-RPC cases vault/get_config + vault/set_config + audit minimization; extend `src/shared/{types,ipc-channels,window.d}.ts` + `src/main/{paths,preload,ipc/vault,ipc/index}.ts`; 4 new Vitest suites (>= 30 passing cases). [07-01-SUMMARY](phases/07-obsidian-integration/07-01-SUMMARY.md)
-- [ ] `07-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: new `daemon/tools/{vault_search,vault_list}.cjs` (ripgrep --no-follow streaming + checkVaultAccess filter / safe_path + readdir sort) + `daemon/vault/wikilink.cjs` (regex + case-fold index); extend `daemon/tools/registry.cjs` TOOLS/SCHEMAS + `daemon/main.cjs` audit minimization; extend `src/shared/types.ts` MessageBlock union with `vault_search`; new `src/renderer/state/vault.ts` (useVaultConfig hook + vaultActions + EVENT_VAULT_CONFIG_UPDATED subscription); new `src/renderer/components/{VaultReadBlock,VaultSearchBlock,VaultWriteBlock}.tsx`; extend `src/renderer/components/MessageBlock.tsx` switch dispatch; 2 new Vitest suites (>= 14 passing cases).
+- [x] `07-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: new `daemon/tools/{vault_search,vault_list}.cjs` (ripgrep --no-follow streaming + checkVaultAccess filter / safe_path + readdir sort) + `daemon/vault/wikilink.cjs` (regex + case-fold index); extend `daemon/tools/registry.cjs` TOOLS/SCHEMAS + `daemon/main.cjs` audit minimization; extend `src/shared/types.ts` MessageBlock union with `vault_search`; new `src/renderer/state/vault.ts` (useVaultConfig hook + vaultActions + EVENT_VAULT_CONFIG_UPDATED subscription); new `src/renderer/components/{VaultReadBlock,VaultSearchBlock,VaultWriteBlock}.tsx`; extend `src/renderer/components/MessageBlock.tsx` switch dispatch; 2 new Vitest suites (>= 14 passing cases). [07-02-SUMMARY](phases/07-obsidian-integration/07-02-SUMMARY.md)
 - [ ] `07-03-PLAN.md` — Wave 3 *(blocked on Wave 2)*: new `src/renderer/components/{BotSettingsObsidianTab,VaultGlobalSettingsModal}.tsx`; extend `src/renderer/components/BotSettingsPage.tsx` (5th tab 'obsidian' + URL hash sync) + `src/renderer/components/App.tsx` (top-bar Vault button + modal mount) + `src/renderer/styles/app.css`; extend `tests/playwright/fake-m3-server.ts` with `streamVaultReadToolUse` + `streamVaultWriteToolUse` + `streamVaultSearchToolUse` helpers; new `tests/playwright/obsidian-integration.test.ts` (4 E2E cases covering vault.read happy + vault.write Agents/<bot>/ + vault.write outside Agents refused + vault.search; audit minimization asserted per case); extend `playwright.config.ts` daemon-smoke project.
 
 **UI hint**: yes
@@ -215,7 +215,7 @@ Plans:
 | 4. Multi-Bot CRUD + Sidebar | 3/3 | Complete | 2026-09-18 |
 | 5. Shell Exec with Approval | 3/3 | Complete | 2026-09-19 |
 | 6. Scheduler + Notifications | 3/3 | Complete | 2026-09-19 |
-| 7. Obsidian Integration | 1/3 | In progress | - |
+| 7. Obsidian Integration | 2/3 | In progress | - |
 | 8. Browser Automation | 0/0 | Not started | - |
 | 9. Phone Reach + Ship | 0/0 | Not started | - |
 
