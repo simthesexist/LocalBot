@@ -7,7 +7,7 @@
 - [ ] **Phase 3: Memory + Conversation History** - Persistent markdown+JSON memory, JSONL history, token-budget summarization, workspace file tree
 - [ ] **Phase 4: Multi-Bot CRUD + Sidebar** - Create/list/edit/delete/run/cancel bots with sidebar, modals, settings, run history
 - [x] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
-- [ ] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
+- [x] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
 - [ ] **Phase 7: Obsidian Integration** - Hybrid vault access (read-anywhere, write-agents-only) with glob enforcement + vault search
 - [ ] **Phase 8: Browser Automation** - Playwright-driven browser tools (navigate, click, type, fill, screenshot, evaluate)
 - [ ] **Phase 9: Phone Reach + Ship** - Tailscale-friendly HTTP/WS control endpoint + Windows .exe packaging with manual update
@@ -118,9 +118,11 @@
 
 **Plans**: 3 plans
 Plans:
+
 - [ ] `05-01-PLAN.md` — Daemon core tracer: denylist + alwaysAllow + exec_command + shell/approve JSON-RPC + execCommandAuditParams + 4 unit suites (exec_denylist, exec_alwaysAllow, exec_command, exec_approve).
 - [ ] `05-02-PLAN.md` — IPC + UI: ipc-channels + types + paths + spawn listeners + preload + shells.ts handler + shells state store + ApprovalModal + ApprovalModalStack + ShellStreamBlock + Composer disable + App mount + 3 unit suites.
 - [ ] `05-03-PLAN.md` — Audit + defense + E2E: daemon main.cjs denylist re-check + exec_audit.test.ts (JSONL minimization) + exec_denylist_defense.test.ts (monkey-patch) + Playwright exec-command-approval.test.ts (5 E2E cases) + fake-m3 streamExecCommandToolUse.
+
 **UI hint**: yes
 
 ### Phase 6: Scheduler + Notifications
@@ -136,7 +138,15 @@ Plans:
   3. User can enable/disable each bot's schedule independently
   4. A system notification fires when a scheduled bot errors, and each bot can opt in or out of notifications
 
-**Plans**: TBD
+**Plans**: 3/3 plans executed
+
+- [x] 06-01-PLAN.md
+- [x] 06-02-PLAN.md
+- [x] 06-03-PLAN.md
+- [x] `06-01-PLAN.md` — Wave 1 *(tracer)*: daemon `bots/trigger(trigger='cron')` JSON-RPC seam + croner lifecycle (`protect:true` + `__fireCronForTest__`) + scheduler.json persistence + audit JSONL minimization (T-P6-19: 3-key shape `{runId, trigger, messageCount}`) + AbortController registration pre-await (AGENT-08) + runSendMessageCycle error path notification event + scheduler_tick.test.ts + bots_update_atomic.test.ts cronEnabled off-cycle.
+- [x] `06-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: main process `spawn.ts` onNotification bridge (debounce 30s per bot) + Electron `Notification.show` integration + IPC `EVENT_NOTIFICATION_TOAST` + `notification:click` handler + `EVENT_NAVIGATE_TO_BOT` + renderer `NotificationToast` UI + `notification_click.test.ts` + `scheduler_notification.test.ts` + `fake-m3-server.ts` `streamExecCommandToolUse` extension.
+- [x] `06-03-PLAN.md` — Wave 3 *(blocked on Wave 2)*: BotSettingsPage Schedule tab `notifyOnError` + `scheduledPrompt` + cron preview (croner `nextRuns(5)`) + BotSidebar scheduled-first sort + SidebarBotRow scheduled pulse dot + RunHistoryTable trigger='cron' label + audit minimization suite (5 cases) + sidebar sort suite (6 cases) + settings schedule suite (8 cases) + Playwright `scheduler-notification.test.ts` 4-case E2E (happy/error/disabled/delete).
+
 **UI hint**: yes
 
 ### Phase 7: Obsidian Integration
@@ -153,7 +163,12 @@ Plans:
   4. User can set global deny globs (e.g., `Private/**`, `Credentials/**`) that block every bot from reading
   5. Bot can search the vault by query and return matching lines with context
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [ ] `07-01-PLAN.md` — Wave 1 *(tracer)*: install `picomatch@^4`; new `daemon/vault/{config,glob,index}.cjs` (atomic <userData>/vault.json + picomatch wrapper + deny-wins pipeline); new `daemon/tools/{vault_read,vault_write}.cjs` (safe_path + glob filter + Agents/<bot>/ containment + tmp+rename atomic); extend `daemon/bots/loader.cjs` ALLOWED_CONFIG_KEYS with vaultPath/vaultAllow/vaultDeny + validateConfig guards; extend `daemon/tools/registry.cjs` TOOLS + SCHEMAS; extend `daemon/main.cjs` tools/call ctx with vaultRoot/globalDeny/vaultDeny/vaultAllow + new JSON-RPC cases vault/get_config + vault/set_config + audit minimization; extend `src/shared/{types,ipc-channels,window.d}.ts` + `src/main/{paths,preload,ipc/vault,ipc/index}.ts`; 4 new Vitest suites (>= 30 passing cases).
+- [ ] `07-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: new `daemon/tools/{vault_search,vault_list}.cjs` (ripgrep --no-follow streaming + checkVaultAccess filter / safe_path + readdir sort) + `daemon/vault/wikilink.cjs` (regex + case-fold index); extend `daemon/tools/registry.cjs` TOOLS/SCHEMAS + `daemon/main.cjs` audit minimization; extend `src/shared/types.ts` MessageBlock union with `vault_search`; new `src/renderer/state/vault.ts` (useVaultConfig hook + vaultActions + EVENT_VAULT_CONFIG_UPDATED subscription); new `src/renderer/components/{VaultReadBlock,VaultSearchBlock,VaultWriteBlock}.tsx`; extend `src/renderer/components/MessageBlock.tsx` switch dispatch; 2 new Vitest suites (>= 14 passing cases).
+- [ ] `07-03-PLAN.md` — Wave 3 *(blocked on Wave 2)*: new `src/renderer/components/{BotSettingsObsidianTab,VaultGlobalSettingsModal}.tsx`; extend `src/renderer/components/BotSettingsPage.tsx` (5th tab 'obsidian' + URL hash sync) + `src/renderer/components/App.tsx` (top-bar Vault button + modal mount) + `src/renderer/styles/app.css`; extend `tests/playwright/fake-m3-server.ts` with `streamVaultReadToolUse` + `streamVaultWriteToolUse` + `streamVaultSearchToolUse` helpers; new `tests/playwright/obsidian-integration.test.ts` (4 E2E cases covering vault.read happy + vault.write Agents/<bot>/ + vault.write outside Agents refused + vault.search; audit minimization asserted per case); extend `playwright.config.ts` daemon-smoke project.
+
 **UI hint**: yes
 
 ### Phase 8: Browser Automation
@@ -198,9 +213,9 @@ Plans:
 | 2. File Tools + Search + Tool System | 3/3 | Complete | 2026-09-18 |
 | 3. Memory + Conversation History | 3/3 | Complete | 2026-09-18 |
 | 4. Multi-Bot CRUD + Sidebar | 3/3 | Complete | 2026-09-18 |
-| 5. Shell Exec with Approval | 0/0 | Not started | - |
-| 6. Scheduler + Notifications | 0/0 | Not started | - |
-| 7. Obsidian Integration | 0/0 | Not started | - |
+| 5. Shell Exec with Approval | 3/3 | Complete | 2026-09-19 |
+| 6. Scheduler + Notifications | 3/3 | Complete | 2026-09-19 |
+| 7. Obsidian Integration | 0/3 | Not started | - |
 | 8. Browser Automation | 0/0 | Not started | - |
 | 9. Phone Reach + Ship | 0/0 | Not started | - |
 

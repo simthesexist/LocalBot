@@ -43,6 +43,17 @@ export function SidebarBotRow({
 }: SidebarBotRowProps) {
   const lastRunText = bot.lastRunAt ? formatRelative(bot.lastRunAt) : 'never';
   const isRunning = bot.status === 'running';
+  const isScheduled = bot.status === 'scheduled';
+  // Phase 6 Wave 3: tooltip surfaces the next fire time when known so
+  // the user can see WHEN the scheduled bot will fire (not just that it
+  // has a schedule).
+  const nextFireAt = (bot as { nextFireAt?: string }).nextFireAt;
+  const statusTitle =
+    isScheduled && nextFireAt
+      ? `Scheduled — fires at ${nextFireAt}`
+      : (bot.status ?? 'idle');
+  const statusClassName =
+    `bot-row-status${isScheduled ? ' bot-row-status--scheduled' : ''}`;
   return (
     <li
       className="bot-row"
@@ -60,10 +71,10 @@ export function SidebarBotRow({
       }}
     >
       <span
-        className="bot-row-status"
+        className={statusClassName}
         data-status={bot.status}
         aria-hidden="true"
-        title={bot.status}
+        title={statusTitle}
       />
       <span className="bot-row-name">{bot.name}</span>
       <span className="bot-row-lastrun">({lastRunText})</span>

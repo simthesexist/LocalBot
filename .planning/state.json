@@ -26,12 +26,12 @@
     {
       "number": "5",
       "name": "Shell Exec with Approval",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "6",
       "name": "Scheduler + Notifications",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "7",
@@ -54,5 +54,5 @@
     "label": "Show progress",
     "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-09-19T11:40:46.858Z"
+  "updated_at": "2026-09-19T12:59:31.966Z"
 }

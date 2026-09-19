@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-status: phase_5_complete
-stopped_at: phase 5 verified + roadmap updated (2026-09-19)
-last_updated: "2026-09-19T11:40:46.800Z"
+status: phase_6_complete
+stopped_at: phase 6 plan 03 complete (2026-09-19)
+last_updated: "2026-09-19T12:59:31.905Z"
 last_activity: 2026-09-19
-state_head: 9005bd8dbc7d42981945009b3cc12a2a8d461cfd
+state_head: 425dd95c7eb656d9cf407b0d7cf7b68748ad9579
 progress:
   total_phases: 9
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
-  percent: 44
-  verified_phases: 5
+  completed_phases: 6
+  total_plans: 20
+  completed_plans: 20
+  percent: 67
+  verified_phases: 6
   partial_phases: 0
-current_phase_name: Scheduler + Notifications
+current_phase_name: Obsidian Integration
 ---
 
 # State: Localbot
@@ -34,13 +34,13 @@ current_phase_name: Scheduler + Notifications
 
 ## Current Position
 
-- **Phase:** 5 — Shell Exec with Approval — complete (3/3 plans executed, 269/270 tests passing, build green)
-- **Phases complete:** 1, 2, 3, 4, 5 fully verified
-- **Branch:** `main` (renamed from `master` 2026-09-18 prior to first GitHub push)
+- **Phase:** 6 — Scheduler + Notifications — complete (3/3 plans executed, 345+ tests passing, build green)
+- **Phases complete:** 1, 2, 3, 4, 5, 6 fully verified
+- **Branch:** `worktree-agent-aceaa58941983a5d1` (active executor worktree); main is at 50a58d1 with 06-02 merged
 - **Remote:** `https://github.com/simthesexist/LocalBot` (Public), 17 commits pushed
 
 ```
-[████░░░░░░░░░░░░░░░░] 22% — 3 of 9 phases executed, 1 fully verified
+[████████░░░░░░░░░░░░] 56% — 6 of 9 phases executed, 6 fully verified
 ```
 
 ## Performance Metrics
@@ -75,6 +75,11 @@ current_phase_name: Scheduler + Notifications
 - **Branch rename master → main** to match GitHub default (2026-09-18, prior to first push)
 - **GitHub push via HTTPS + PAT** — SSH not configured on this machine for `git@github.com`; PAT stored in Windows Credential Manager after first push
 - **Markdown library deferred to Phase 4+** — no Phase 1/2/3 path produces code blocks requiring syntax highlighting
+- **Croner `nextRuns(5)` over per-call `.next()`** — Croner 9's instance API exposes `.nextRuns(count)` and `.nextRun(after?)`; the initial `.next()` call was wrong (Plan 06-03, commit `785736c`)
+- **Croner named-export with default fallback** — `mod.Cron ?? mod.default?.Cron` defends against bundler variations in the Vite renderer build
+- **SidebarBotRow reads `bot.status`, not a computed-within-60s check** — keeps the renderer dumb and the daemon authoritative (Plan 06-03); daemon emits `bot:status {status:'scheduled'}` on transitions only
+- **Audit minimization 3-key shape** — every `bots.run` audit row carries EXACTLY `{runId, trigger, messageCount}`; no scheduledPrompt text, no cron expression, no error stack (T-P6-19 mitigation; verified by 5 unit cases + 1 Playwright error-path E2E)
+- **happy-dom + createRoot + act() instead of @testing-library/react** — minimal dep surface, exercises real React 19 lifecycle; `// @vitest-environment happy-dom` per-file override keeps default node env for .test.ts
 
 ### Open Questions
 
@@ -125,8 +130,16 @@ None.
 - [x] Refresh STATE.md (this commit)
 - [x] Close G-3-2 preload code-fix (`window.localbot.invoke` added; headed smoke `LOCALBOT_SMOKE_OK=1` still required on a desktop machine)
 - [ ] Close G-3-3 (DiffView + chokidar flaky on Windows headed)
-- [ ] Plan Phase 4 (`/gsd-plan-phase 4`)
-- [ ] Execute Phase 4 (`/gsd-execute-phase 4`)
+- [x] Plan Phase 4 (`/gsd-plan-phase 4`)
+- [x] Execute Phase 4 (`/gsd-execute-phase 4`)
+- [x] Plan Phase 5 (`/gsd-plan-phase 5`)
+- [x] Execute Phase 5 (`/gsd-execute-phase 5`)
+- [x] Plan Phase 6 (`/gsd-plan-phase 6`)
+- [x] Execute Phase 6 Plan 1 (`/gsd-execute-phase 6` → 06-01 cron lifecycle tracer)
+- [x] Execute Phase 6 Plan 2 (`/gsd-execute-phase 6` → 06-02 notification bridge)
+- [x] Execute Phase 6 Plan 3 (`/gsd-execute-phase 6` → 06-03 scheduler UI + E2E)
+- [ ] Plan Phase 7 (`/gsd-plan-phase 7`)
+- [ ] Execute Phase 7 (`/gsd-execute-phase 7`)
 - [ ] Run headed Electron smoke + real-keychain tests on a desktop machine (final acceptance gate)
 
 ## Session Continuity

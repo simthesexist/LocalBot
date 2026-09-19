@@ -63,6 +63,17 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
   );
   const [cron, setCron] = useState(bot.cron || '');
   const [cronEnabled, setCronEnabled] = useState(Boolean(bot.cronEnabled));
+  // Phase 6 Wave 3: notifyOnError defaults true when undefined (back-compat
+  // with bots persisted before Phase 6). scheduledPrompt defaults to '' and
+  // the daemon falls back to '[Scheduled run] Perform your regular check-in.'
+  // when empty.
+  const [notifyOnError, setNotifyOnError] = useState(bot.notifyOnError !== false);
+  const [scheduledPrompt, setScheduledPrompt] = useState(bot.scheduledPrompt ?? '');
+  // Client-side cron validation + next-fire preview. The renderer bundles
+  // croner via Vite (it's a runtime dep), but we import lazily so the
+  // initial render never throws if the cron expression is mid-edit.
+  const [cronError, setCronError] = useState<string | null>(null);
+  const [nextFires, setNextFires] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,6 +105,55 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Phase 6 Wave 3: client-side cron validation + next-fire preview.
+  // Runs whenever the cron expression changes. We import croner lazily
+  // (it's a runtime dep bundled via Vite) so a bad expression can't
+  // crash the initial mount. An empty cron clears the preview + error.
+  useEffect(() => {
+    let cancelled = false;
+    const trimmed = cron.trim();
+    if (!trimmed) {
+      setCronError(null);
+      setNextFires([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const mod = await import('croner');
+        // croner@9 exports the Cron constructor as a named export; some
+        // bundlers surface it via .default too. Prefer named, fall back.
+        const modAny = mod as unknown as { Cron?: unknown; default?: { Cron?: unknown } };
+        const Cron = modAny.Cron ?? modAny.default?.Cron;
+        if (typeof Cron !== 'function') {
+          throw new Error('croner export shape changed');
+        }
+        const CronCtor = Cron as new (
+          expr: string,
+          opts?: Record<string, unknown>,
+        ) => { nextRuns(count: number): Array<Date | null>; nextRun(after?: Date): Date | null };
+        const instance = new CronCtor(trimmed, { protect: true });
+        const dates = instance.nextRuns(5);
+        const fires: string[] = [];
+        for (const d of dates) {
+          if (!d) break;
+          fires.push(d.toISOString());
+        }
+        if (!cancelled) {
+          setCronError(null);
+          setNextFires(fires);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCronError((e as Error).message || 'Invalid cron expression');
+          setNextFires([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cron]);
 
   // Auto-clear save indicator after 1.5s.
   useEffect(() => {
@@ -155,7 +215,16 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
   const scheduleScheduleSave = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const patch: Record<string, unknown> = { cronEnabled };
+      // Phase 6 Wave 3: surface cron validation to the daemon. If the
+      // croner import failed OR the expression is invalid, skip the patch
+      // (the inline error + disabled Save are the UX; the daemon's
+      // CRON_REGEX would reject anyway).
+      if (cronError) return;
+      const patch: Record<string, unknown> = {
+        cronEnabled,
+        notifyOnError,
+        scheduledPrompt,
+      };
       if (cron.trim()) patch.cron = cron.trim();
       else patch.cron = '';
       void persistPatch(patch);
@@ -300,9 +369,19 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
               onChange={(e) => setCron(e.target.value)}
               onBlur={scheduleScheduleSave}
               data-testid="settings-cron"
-              placeholder="e.g. 0 9 * * 1-5 (Phase 6 wires the scheduler)"
+              placeholder="e.g. 0 9 * * 1-5 (5-field standard cron)"
             />
           </label>
+          {cron.trim() && cronError && (
+            <div className="form-error" data-testid="settings-cron-error" role="alert">
+              Invalid cron expression: {cronError}
+            </div>
+          )}
+          {cron.trim() && !cronError && nextFires.length > 0 && (
+            <div className="settings-next-fires" data-testid="settings-next-fires">
+              Next fires: {nextFires.join(', ')}
+            </div>
+          )}
           <label className="form-checkbox">
             <input
               type="checkbox"
@@ -311,8 +390,43 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
               onBlur={scheduleScheduleSave}
               data-testid="settings-cron-enabled"
             />
-            <span>Enable cron (Phase 6)</span>
+            <span>Enable cron schedule</span>
           </label>
+          <label className="form-checkbox">
+            <input
+              type="checkbox"
+              checked={notifyOnError}
+              onChange={(e) => setNotifyOnError(e.target.checked)}
+              onBlur={scheduleScheduleSave}
+              data-testid="settings-notify-on-error"
+            />
+            <span>Notify on scheduled-run errors</span>
+          </label>
+          <label className="form-label">
+            Scheduled prompt
+            <textarea
+              className="modal-input"
+              value={scheduledPrompt}
+              maxLength={4096}
+              rows={4}
+              onChange={(e) => setScheduledPrompt(e.target.value)}
+              onBlur={scheduleScheduleSave}
+              data-testid="settings-scheduled-prompt"
+              placeholder="[Scheduled run] Perform your regular check-in."
+            />
+          </label>
+          <div className="form-hint">
+            Save status:{' '}
+            <button
+              type="button"
+              className="modal-button primary"
+              data-testid="settings-schedule-save"
+              disabled={!!cronError}
+              onClick={scheduleScheduleSave}
+            >
+              Save schedule
+            </button>
+          </div>
         </section>
       )}
 

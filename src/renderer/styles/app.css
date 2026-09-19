@@ -1037,6 +1037,49 @@ html, body, #root {
   background: var(--lb-status-scheduled);
 }
 
+.bot-row-status--scheduled {
+  background: var(--lb-status-scheduled);
+  animation: lb-pulse 2s ease-in-out infinite;
+}
+
+.settings-next-fires {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  margin: 4px 0 8px 0;
+  word-break: break-all;
+}
+
+.form-error {
+  color: var(--color-error-text, #991b1b);
+  background: var(--color-error-bg, #fef2f2);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 4px 0 8px 0;
+}
+
+.form-hint {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 8px;
+}
+
+.run-history-trigger-badge[data-trigger="cron"] {
+  background: var(--color-info-bg, #eff6ff);
+  color: var(--color-info-text, #1d4ed8);
+  border: 1px solid #bfdbfe;
+}
+
+.run-history-trigger-badge[data-trigger="manual"] {
+  background: var(--color-code-bg, #f6f8fa);
+  color: var(--color-text-muted, #6b7280);
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+
 @keyframes lb-pulse {
   0% { opacity: 1; }
   50% { opacity: 0.4; }

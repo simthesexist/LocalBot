@@ -47,6 +47,32 @@ export function BotSidebar({ initialBots, onOpenSettings }: BotSidebarProps = {}
   const activeBot = bots.find((b) => b.id === activeBotId) ?? null;
   const composerDisabled = activeBot?.status === 'running';
 
+  // Phase 6 Wave 3: scheduled bots surface first so the user sees what's
+  // about to fire. Within each tier we sort by nextFireAt ascending (the
+  // earlier-firing bot comes first), then by name as a stable tiebreaker.
+  const STATUS_RANK: Record<string, number> = {
+    scheduled: 0,
+    running: 1,
+    errored: 2,
+    idle: 3,
+  };
+  const sortedBots = [...bots].sort((a, b) => {
+    const ra = STATUS_RANK[a.status ?? 'idle'] ?? 99;
+    const rb = STATUS_RANK[b.status ?? 'idle'] ?? 99;
+    if (ra !== rb) return ra - rb;
+    const aNext = (a as { nextFireAt?: string }).nextFireAt;
+    const bNext = (b as { nextFireAt?: string }).nextFireAt;
+    if (aNext && bNext) {
+      const cmp = aNext.localeCompare(bNext);
+      if (cmp !== 0) return cmp;
+    } else if (aNext) {
+      return -1;
+    } else if (bNext) {
+      return 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
   return (
     <aside
       className="bot-sidebar"
@@ -78,7 +104,7 @@ export function BotSidebar({ initialBots, onOpenSettings }: BotSidebarProps = {}
         {loading && bots.length === 0 && (
           <li className="bot-sidebar-empty">Loading bots…</li>
         )}
-        {bots.map((bot) => (
+        {sortedBots.map((bot) => (
           <SidebarBotRow
             key={bot.id}
             bot={bot}
