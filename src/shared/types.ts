@@ -10,6 +10,8 @@ export type Role = 'user' | 'assistant';
 // Phase 5 Wave 2: shell_stream variant for live stdout/stderr from exec_command.
 // Phase 7 Plan 1: vault_read + vault_write variants (vault_search lands in
 // Plan 07-02).
+// Phase 7 Plan 2: vault_search variant added. VaultReadBlock / VaultSearchBlock
+// / VaultWriteBlock render these three inline in MessageBlock dispatch.
 export type MessageBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
@@ -35,6 +37,12 @@ export type MessageBlock =
       bytes: number;
       startLine?: number;
       endLine?: number;
+      truncated: boolean;
+    }
+  | {
+      kind: 'vault_search';
+      query: string;
+      matches: Array<{ path: string; line: number; text: string }>;
       truncated: boolean;
     }
   | {

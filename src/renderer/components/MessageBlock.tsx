@@ -13,6 +13,9 @@ import { ToolUseBlock } from './ToolUseBlock';
 import { ToolResultBlock } from './ToolResultBlock';
 import { DiffView } from './DiffView';
 import { ShellStreamBlock } from './ShellStreamBlock';
+import { VaultReadBlock } from './VaultReadBlock';
+import { VaultSearchBlock } from './VaultSearchBlock';
+import { VaultWriteBlock } from './VaultWriteBlock';
 
 export interface MessageBlockProps {
   block: Block;
@@ -86,6 +89,12 @@ export function MessageBlock({ block, toolUseBlocks }: MessageBlockProps): React
       );
     case 'shell_stream':
       return <ShellStreamBlock block={block} />;
+    case 'vault_read':
+      return <VaultReadBlock block={block} />;
+    case 'vault_search':
+      return <VaultSearchBlock block={block} />;
+    case 'vault_write':
+      return <VaultWriteBlock block={block} />;
     default: {
       // Exhaustiveness check — TS will error here if a new kind is added
       // without a renderer branch.

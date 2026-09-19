@@ -243,6 +243,34 @@ function vaultAuditParams(name, args, successResult) {
   return { path: relPath, bytes: typeof utilBytes === 'number' ? utilBytes : 0 };
 }
 
+// Phase 7 Plan 2: vault.search audit minimization. Mirrors codeSearchAuditParams
+// shape but for vault-relative content. NEVER include match snippets or
+// absolute paths — only {query, glob, result_count, truncated}.
+function vaultSearchAuditParams(args, successResult) {
+  const resultCount = (successResult && typeof successResult.count === 'number')
+    ? successResult.count
+    : 0;
+  return {
+    query: (args && typeof args.pattern === 'string') ? args.pattern : '',
+    glob: (args && typeof args.glob === 'string') ? args.glob : null,
+    result_count: resultCount,
+    truncated: !!(successResult && successResult.truncated),
+  };
+}
+
+// Phase 7 Plan 2: vault.list audit minimization. Never include the entries
+// array — only {path: relativePath, entryCount}.
+function vaultListAuditParams(args, successResult) {
+  const fallbackPath = (args && typeof args.path === 'string') ? args.path : '';
+  const relPath = (successResult && typeof successResult.path === 'string')
+    ? successResult.path
+    : fallbackPath;
+  const entryCount = (successResult && Array.isArray(successResult.entries))
+    ? successResult.entries.length
+    : 0;
+  return { path: relPath, entryCount };
+}
+
 function reply(obj) {
   writeMessage(process.stdout, obj);
 }
@@ -493,6 +521,13 @@ rl.on('line', async (line) => {
             // include absolute vault path or rootPath. Only vault-relative
             // path + bytes / bytesWritten.
             auditParams = vaultAuditParams(name, args, successResult);
+          } else if (name === 'vault.search') {
+            // Phase 7 Plan 2: query + result_count + truncated (no match
+            // snippets, no absolute paths).
+            auditParams = vaultSearchAuditParams(args, successResult);
+          } else if (name === 'vault.list') {
+            // Phase 7 Plan 2: path + entryCount (no entry names).
+            auditParams = vaultListAuditParams(args, successResult);
           } else {
             auditParams = args;
           }
