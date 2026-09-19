@@ -283,8 +283,8 @@ describe('loader.deleteBot', () => {
 });
 
 describe('loader.ALLOWED_CONFIG_KEYS (schema surface)', () => {
-  it('exposes the 19 canonical keys from the plan (Phase 6 adds notifyOnError + scheduledPrompt; Phase 7 adds vaultPath + vaultAllow + vaultDeny)', () => {
-    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(19);
+  it('exposes the 22 canonical keys from the plan (Phase 6 adds notifyOnError + scheduledPrompt; Phase 7 adds vaultPath + vaultAllow + vaultDeny; Phase 8 adds browserAllow + browserDeny + ssrfAllowInternal)', () => {
+    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(22);
     expect(loader.ALLOWED_CONFIG_KEYS.has('id')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('schemaVersion')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('allowlist')).toBe(true);
@@ -293,6 +293,9 @@ describe('loader.ALLOWED_CONFIG_KEYS (schema surface)', () => {
     expect(loader.ALLOWED_CONFIG_KEYS.has('vaultPath')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('vaultAllow')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('vaultDeny')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('browserAllow')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('browserDeny')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('ssrfAllowInternal')).toBe(true);
   });
 });
 
