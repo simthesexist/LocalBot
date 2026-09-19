@@ -9,6 +9,7 @@ import { hasStoredKey } from './ipc/key';
 import { loadSession } from './sessions/jsonl';
 import { listBotsFromDisk } from './bots/config';
 import { registerShellHandlers } from './ipc/shells';
+import { registerNotificationHandlers } from './ipc/notifications';
 
 // Phase 5 Wave 2: bridge the daemon's shell:* notifications to the renderer
 // (shell:request-approval, shell:token, shell:exit) and wire the
@@ -19,6 +20,18 @@ try {
 } catch (err) {
   // eslint-disable-next-line no-console
   console.error('registerShellHandlers failed', err);
+}
+
+// Phase 6 Wave 2: bridge the daemon's `notification:scheduled-error` to an
+// Electron Notification toast and route the click back to the renderer via
+// `event:navigate-to-bot`. Also fires the app.setAppUserModelId guard so
+// toasts group under 'Localbot' in Windows Action Center. Safe to call
+// multiple times — the underlying onNotification set is keyed by method.
+try {
+  registerNotificationHandlers();
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('registerNotificationHandlers failed', err);
 }
 
 // Per-window app:init trigger so the renderer can ASK main to re-send the
