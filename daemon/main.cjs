@@ -1239,6 +1239,112 @@ rl.on('line', async (line) => {
         }
       }
 
+      // Phase 8 Plan 2: browser/get_screenshot — read the byte count
+      // of a PNG under <userData>/screenshots/<runId>/<n>.png. The
+      // main IPC bridge in src/main/ipc/browser.ts uses this for the
+      // `bytes` field of BrowserScreenshotResult; the renderer never
+      // receives the PNG bytes over IPC (it fetches them via app://).
+      // runId + n are validated against the same safe regex used by
+      // the protocol handler — defense in depth (the renderer can't
+      // inject ../ traversal).
+      case 'browser/get_screenshot': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) {
+            throw Object.assign(new Error('daemon not initialized'),
+              { code: 'daemon_not_initialized' });
+          }
+          const r = params && params.runId;
+          const n = params && params.n;
+          const RUN_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+          const N_REGEX = /^[a-zA-Z0-9._-]{1,32}$/;
+          if (typeof r !== 'string' || !RUN_ID_REGEX.test(r)) {
+            throw Object.assign(new Error('invalid runId'),
+              { code: 'invalid_path' });
+          }
+          if (typeof n !== 'string' || !N_REGEX.test(n)) {
+            throw Object.assign(new Error('invalid n'),
+              { code: 'invalid_path' });
+          }
+          const filePath = path.join(userDataDirState, 'screenshots', r, `${n}.png`);
+          let bytes = 0;
+          try {
+            const stat = await fs.promises.stat(filePath);
+            bytes = stat.size;
+          } catch (e) {
+            if (e && e.code === 'ENOENT') {
+              replyResult(id, { ok: false, error: 'not_found' });
+              audit.appendAudit({
+                tool: 'browser.get_screenshot',
+                bot: currentBot,
+                params: { runId: r, n },
+                outcome: 'error',
+                durationMs: Date.now() - startedAt,
+                error: { code: 'not_found', message: 'screenshot missing' },
+              });
+              break;
+            }
+            throw e;
+          }
+          audit.appendAudit({
+            tool: 'browser.get_screenshot',
+            bot: currentBot,
+            params: { runId: r, n },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, bytes });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'browser.get_screenshot',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'get_screenshot_failed', message: err.message },
+          });
+          replyError(id, err.code || 'get_screenshot_failed', err.message);
+        }
+        break;
+      }
+
+      // Phase 8 Plan 2: browser/delete_context — close + remove the
+      // per-bot BrowserContext (Pitfall 7 cleanup). Mirrors the
+      // daemon-side browser.deleteContext helper which already exists
+      // (Plan 1). The renderer calls this when a bot is deleted OR
+      // when the user wants to immediately forget cookies without
+      // removing the bot.
+      case 'browser/delete_context': {
+        const startedAt = Date.now();
+        try {
+          const botArg = (params && typeof params.bot === 'string') ? params.bot : '';
+          if (!botArg) {
+            throw Object.assign(new Error('bot required'),
+              { code: 'invalid_request' });
+          }
+          await browser.deleteContext(botArg);
+          audit.appendAudit({
+            tool: 'browser.delete_context',
+            bot: botArg,
+            params: { bot: botArg },
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'browser.delete_context',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'delete_context_failed', message: err.message },
+          });
+          replyError(id, err.code || 'delete_context_failed', err.message);
+        }
+        break;
+      }
+
       default: {
         replyError(id, -32601, `method not found: ${method}`);
       }

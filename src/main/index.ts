@@ -1,6 +1,6 @@
 // Electron main entry.
 
-import { app } from 'electron';
+import { app, protocol } from 'electron';
 import { createMainWindow } from './window';
 import { registerKeyHandlers } from './ipc/key';
 import { registerChatHandlers } from './ipc/chat';
@@ -11,10 +11,38 @@ import { registerBotHandlers } from './ipc/bots';
 // Phase 7 Plan 1: Obsidian vault config IPC handlers (VAULT_GET_CONFIG +
 // VAULT_SET_CONFIG + EVENT_VAULT_CONFIG_UPDATED broadcast).
 import { registerVaultHandlers } from './ipc/vault';
+// Phase 8 Plan 2: browser IPC handlers (BROWSER_GET_SCREENSHOT +
+// BROWSER_DELETE_CONTEXT) + app:// custom protocol handler for serving
+// screenshot PNGs to the renderer.
+import { registerBrowserHandlers } from './ipc/browser';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs } from './paths';
 import { appendAuditLine } from './audit/logger';
 import { ensureTreeWatcherStarted } from './tree/list';
+
+// Phase 8 Plan 2: register `app://` as a privileged scheme BEFORE
+// app.whenReady(). Electron requires scheme privileges to be declared
+// before `protocol.handle` is called, and that handler can only run
+// after ready. Failing to register this here means protocol.handle('app')
+// throws ERR_INVALID_SCHEME at runtime (Pitfall 8: must be top-level
+// before any ready handlers).
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      // stream: true → the handler may return a Response with a stream body.
+      // We use Response with raw Buffer (PNG bytes) — declared here so
+      // Chromium does not reject the response at the network layer.
+      stream: true,
+      // bypassCSP: false (default) — keep CSP enforcement on.
+      bypassCSP: false,
+      corsEnabled: false,
+    },
+  },
+]);
 
 // Enforce single instance.
 const gotLock = app.requestSingleInstanceLock();
@@ -56,6 +84,11 @@ void app.whenReady().then(async () => {
   registerBotHandlers();
   // Phase 7 Plan 1: vault config IPC.
   registerVaultHandlers();
+  // Phase 8 Plan 2: browser IPC + app:// protocol handler. Must be
+  // called inside whenReady (the protocol.handle call inside
+  // registerBrowserHandlers requires app to be ready) but AFTER the
+  // scheme registration above (top-level).
+  registerBrowserHandlers();
 
   createMainWindow();
 

@@ -61,6 +61,71 @@ export type MessageBlock =
       text: string;
       bytes: number;
       durationMs: number;
+    }
+  | {
+      // Phase 8 Plan 2: browser.click result. `hostname` + `path` carry
+      // page.url() with the query string stripped (Pitfall 5). `text`
+      // is the 5KB-clipped innerText of the clicked element; never the
+      // raw HTML or any attribute value the agent shouldn't see.
+      kind: 'browser_click';
+      selector: string;
+      hostname: string;
+      path: string;
+      text: string;
+      durationMs: number;
+    }
+  | {
+      // Phase 8 Plan 2: browser.type result. The actual typed text is
+      // NEVER included in the audit OR the MessageBlock (Pitfall 5).
+      // Only `textBytes` (byte count) is exposed; renderer uses this
+      // to show "Typed 12 chars" without leaking the secret.
+      kind: 'browser_type';
+      selector: string;
+      textBytes: number;
+      hostname: string;
+      path: string;
+      submitted: boolean;
+      durationMs: number;
+    }
+  | {
+      // Phase 8 Plan 2: browser.screenshot result. PNG bytes are NEVER
+      // included in the MessageBlock (Pitfall 5); only the byte count +
+      // app:// URI. The renderer fetches the actual image via the app://
+      // protocol handler in src/main/ipc/browser.ts.
+      kind: 'browser_screenshot';
+      filename: string;
+      fileUri: string;
+      bytes: number;
+      hostname: string;
+      path: string;
+      fullPage: boolean;
+      durationMs: number;
+    }
+  | {
+      // Phase 8 Plan 2: browser.evaluate result. The expression source
+      // and the raw evaluation result are NEVER included (Pitfall 5).
+      // Only byte counts + a truncated string preview for visual
+      // rendering. Tool throws {code:'result_too_large'} when the
+      // serialized result exceeds 50KB.
+      kind: 'browser_evaluate';
+      expressionBytes: number;
+      resultBytes: number;
+      resultPreview: string;
+      hostname: string;
+      path: string;
+      durationMs: number;
+    }
+  | {
+      // Phase 8 Plan 2: browser.fill_form result. Individual field values
+      // are NEVER included (Pitfall 5). Only the field count + a
+      // human-readable "filled N fields" summary that omits the values.
+      kind: 'browser_fill_form';
+      fieldCount: number;
+      hostname: string;
+      path: string;
+      submitted: boolean;
+      summary: string;
+      durationMs: number;
     };
 
 /** Phase 5 Wave 2: pending shell approval request from the daemon. */
