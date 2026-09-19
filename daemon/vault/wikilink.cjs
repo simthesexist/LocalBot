@@ -19,7 +19,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 
 // Reset lastIndex so repeated calls share the module-scope RegExp.
-const WIKILINK_RE = /\[\[([^\[\]|]+)(?:#([^\[\]|]+))?(?:\|([^\[\]]+))?\]\]/g;
+//
+// Title class EXCLUDES `#` so `[[Note#Section]]` MUST parse #Section as
+// the section (not fold it into the title). The plan's draft regex
+// `[^\[\]|]+` greedily ate `#Section` as the title; this corrected form
+// uses `[^\[\]|#]+` so the section branch is forced (Pitfall 8).
+const WIKILINK_RE = /\[\[([^\[\]|#]+)(?:#([^\[\]|]+))?(?:\|([^\[\]]+))?\]\]/g;
 
 function parseWikilinks(text) {
   if (typeof text !== 'string' || text.length === 0) return [];
