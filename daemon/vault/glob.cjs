@@ -20,11 +20,16 @@ function makeMatcher(patterns) {
   if (!Array.isArray(patterns) || patterns.length === 0) {
     return () => false;
   }
+  // Defensive: filter out non-string entries before handing to picomatch.
+  // The loader enforces array-of-strings at config-write time; this is a
+  // belt-and-braces guard for hand-edited vault.json or in-test injection.
+  const cleaned = patterns.filter((p) => typeof p === 'string' && p.length > 0);
+  if (cleaned.length === 0) return () => false;
   // dot: true so .obsidian/*.json etc. are matched by '**' globs;
   // nocase: false so users get POSIX-strict matching (Obsidian itself is
   // case-insensitive on case-folded filesystems, but the daemon runs on
   // Windows where paths are already case-insensitive at the OS layer).
-  return picomatch(patterns, { dot: true, nocase: false });
+  return picomatch(cleaned, { dot: true, nocase: false });
 }
 
 function firstMatching(patterns, relPath) {
