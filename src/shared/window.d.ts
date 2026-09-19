@@ -32,6 +32,9 @@ import type {
   MemoryReadResult,
   MemoryUpdatedEvent,
   SessionEntry,
+  ShellExitEvent,
+  ShellRequestApprovalEvent,
+  ShellTokenEvent,
   TokenEvent,
   ToolResultEvent,
   ToolUseEvent,
@@ -64,7 +67,12 @@ export type LocalbotChannel =
   | 'bots:trigger'
   | 'bots:cancel'
   // Phase 4 Wave 3:
-  | 'bots:runs';
+  | 'bots:runs'
+  // Phase 5 Wave 2:
+  | 'shells:respond'
+  | 'shell:request-approval'
+  | 'shell:token'
+  | 'shell:exit';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -79,7 +87,11 @@ export type LocalbotEventPayload =
   | MemoryUpdatedEvent
   | TreeRefreshEvent
   | BotListUpdatedEvent
-  | BotStatusEvent;
+  | BotStatusEvent
+  // Phase 5 Wave 2:
+  | ShellRequestApprovalEvent
+  | ShellTokenEvent
+  | ShellExitEvent;
 
 export interface LocalbotApi {
   sendMessage: (content: string, msgId: string, bot?: string) => Promise<{ ok: boolean; error?: string }>;
@@ -115,6 +127,12 @@ export interface LocalbotApi {
     cancel: (req: BotCancelRequest) => Promise<BotCancelResult>;
     // Phase 4 Wave 3: paginated run history read.
     runs: (req: BotRunsRequest) => Promise<BotRunsResult>;
+  };
+  /**
+   * Phase 5 Wave 2: shell approval + streaming IPC surface.
+   */
+  shell: {
+    respond: (shellId: string, decision: 'allow-once' | 'allow-always' | 'deny') => Promise<void>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

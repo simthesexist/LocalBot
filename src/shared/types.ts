@@ -7,11 +7,54 @@ export type Role = 'user' | 'assistant';
 // Phase 3: extended discriminated union. The renderer ignores unknown kinds
 // gracefully (MessageBlock falls back to a generic renderer) so adding a
 // new kind (like `summary`) does not break older builds.
+// Phase 5 Wave 2: shell_stream variant for live stdout/stderr from exec_command.
 export type MessageBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
   | { kind: 'tool_result'; toolUseId: string; content: string; isError: boolean }
-  | { kind: 'summary'; summary: SummaryRecord };
+  | { kind: 'summary'; summary: SummaryRecord }
+  | {
+      kind: 'shell_stream';
+      shellId: string;
+      bot: string;
+      command: string;
+      approvedBy: 'user-once' | 'user-always' | null;
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      durationMs: number | null;
+      isError: boolean;
+      startedAt: number;
+    };
+
+/** Phase 5 Wave 2: pending shell approval request from the daemon. */
+export interface ApprovalRequest {
+  shellId: string;
+  command: string;
+  bot: string;
+  requestedAt: number;
+}
+
+export interface ShellTokenEvent {
+  shellId: string;
+  stream: 'stdout' | 'stderr';
+  line: string;
+  ts: number;
+}
+
+export interface ShellExitEvent {
+  shellId: string;
+  exitCode: number;
+  durationMs: number;
+  isError: boolean;
+}
+
+export interface ShellRequestApprovalEvent {
+  shellId: string;
+  command: string;
+  bot: string;
+  ts: number;
+}
 
 /**
  * Phase 3: head-of-file summary record. Persisted as the first JSONL row of

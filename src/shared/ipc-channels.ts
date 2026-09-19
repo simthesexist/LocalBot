@@ -54,6 +54,12 @@ export const CHANNELS = {
   EVENT_BOT_LIST_UPDATED: 'bot:list:updated',
   EVENT_BOT_STATUS: 'bot:status',
 
+  // Phase 5 Wave 2: shell approval + streaming.
+  SHELLS_RESPOND: 'shells:respond',
+  EVENT_SHELL_REQUEST_APPROVAL: 'shell:request-approval',
+  EVENT_SHELL_TOKEN: 'shell:token',
+  EVENT_SHELL_EXIT: 'shell:exit',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;
