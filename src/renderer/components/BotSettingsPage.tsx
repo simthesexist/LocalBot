@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BotConfig } from '../../shared/types';
 import { RunHistoryTable } from './RunHistoryTable';
 import { BotSettingsObsidianTab } from './BotSettingsObsidianTab';
+import { BotSettingsBrowserTab } from './BotSettingsBrowserTab';
 
 export interface BotSettingsPageProps {
   bot: BotConfig;
@@ -22,14 +23,17 @@ export interface BotSettingsPageProps {
 // deny globs + the 4 vault.* tool checkboxes. Lives alongside the existing
 // general/permissions/schedule/history tabs; URL hash sync + ArrowLeft/Right
 // navigation pick it up automatically via TAB_IDS.
-type TabId = 'general' | 'permissions' | 'schedule' | 'history' | 'obsidian';
-const TAB_IDS: TabId[] = ['general', 'permissions', 'schedule', 'history', 'obsidian'];
+// Phase 8 Plan 3: 6th 'browser' tab — per-bot URL allow/deny globs + SSRF
+// opt-out toggle + the 6 browser.* tool checkboxes. Mirrors BotSettingsObsidianTab.
+type TabId = 'general' | 'permissions' | 'schedule' | 'history' | 'obsidian' | 'browser';
+const TAB_IDS: TabId[] = ['general', 'permissions', 'schedule', 'history', 'obsidian', 'browser'];
 const TAB_LABELS: Record<TabId, string> = {
   general: 'General',
   permissions: 'Permissions',
   schedule: 'Schedule',
   history: 'Run History',
   obsidian: 'Obsidian',
+  browser: 'Browser',
 };
 
 const TOOL_OPTIONS: Array<{ name: string; label: string }> = [
@@ -444,6 +448,15 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
 
       {activeTab === 'obsidian' && (
         <BotSettingsObsidianTab
+          bot={bot}
+          onPatch={(patch) => void persistPatch(patch)}
+          saving={saveStatus === 'saving'}
+          error={saveStatus === 'error' ? saveError : null}
+        />
+      )}
+
+      {activeTab === 'browser' && (
+        <BotSettingsBrowserTab
           bot={bot}
           onPatch={(patch) => void persistPatch(patch)}
           saving={saveStatus === 'saving'}

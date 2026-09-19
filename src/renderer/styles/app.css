@@ -1808,3 +1808,151 @@ html, body, #root {
   outline: 2px solid var(--color-accent, #2563eb);
   outline-offset: 2px;
 }
+
+/* ─── Phase 8 Plan 3: browser settings UI + browser block styles ─── */
+
+/* All 6 Browser*Block message blocks share a monospace background +
+ * thin border shape (mirrors the .block-vault-* rules above). */
+.block-browser-navigate,
+.block-browser-click,
+.block-browser-type,
+.block-browser-fill-form,
+.block-browser-screenshot,
+.block-browser-evaluate {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-code-bg, #f6f8fa);
+  border: 1px solid var(--color-border, #e5e7eb);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.block-browser-header,
+.block-browser-navigate .block-header,
+.block-browser-click .block-header,
+.block-browser-type .block-header,
+.block-browser-fill-form .block-header,
+.block-browser-screenshot .block-header,
+.block-browser-evaluate .block-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.block-browser-url,
+.block-browser-selector,
+.block-browser-screenshot-ref,
+.block-browser-field-count,
+.block-browser-hostpath {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text, #111827);
+}
+
+.block-browser-status,
+.block-browser-bytes,
+.block-browser-text-bytes,
+.block-browser-expression-bytes,
+.block-browser-result-bytes,
+.block-browser-duration,
+.block-browser-fullpage {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-muted, #6b7280);
+  font-size: 11px;
+}
+
+.block-browser-status-2xx { color: #2a8a2a; font-weight: 600; }
+.block-browser-status-3xx { color: #b8860b; font-weight: 600; }
+.block-browser-status-4xx,
+.block-browser-status-5xx { color: #d33; font-weight: 600; }
+
+.block-browser-content,
+.block-browser-eval-result {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  background: transparent;
+}
+
+.block-browser-title {
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+.block-browser-screenshot-img {
+  max-height: 400px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 8px 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.block-browser-screenshot-missing {
+  font-style: italic;
+  color: var(--color-text-muted, #6b7280);
+  padding: 8px 0;
+}
+
+.block-browser-submitted {
+  background: #e8f5e9;
+  color: #2a8a2a;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  margin-left: 4px;
+  font-family: var(--font-mono, monospace);
+}
+
+/* BotSettingsPage Browser tab — mirrors settings-tab-obsidian shape. */
+.settings-tab-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-tab-browser .form-section {
+  margin-bottom: 4px;
+}
+
+.settings-tab-browser .form-label {
+  display: block;
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: var(--color-text, #111827);
+}
+
+.settings-tab-browser .browser-glob-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.settings-tab-browser .form-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-tab-browser code {
+  background: var(--color-code-bg, #f6f8fa);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}

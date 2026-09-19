@@ -16,6 +16,12 @@ import { ShellStreamBlock } from './ShellStreamBlock';
 import { VaultReadBlock } from './VaultReadBlock';
 import { VaultSearchBlock } from './VaultSearchBlock';
 import { VaultWriteBlock } from './VaultWriteBlock';
+import { BrowserNavigateBlock } from './BrowserNavigateBlock';
+import { BrowserClickBlock } from './BrowserClickBlock';
+import { BrowserTypeBlock } from './BrowserTypeBlock';
+import { BrowserFillFormBlock } from './BrowserFillFormBlock';
+import { BrowserScreenshotBlock } from './BrowserScreenshotBlock';
+import { BrowserEvaluateBlock } from './BrowserEvaluateBlock';
 
 export interface MessageBlockProps {
   block: Block;
@@ -95,6 +101,18 @@ export function MessageBlock({ block, toolUseBlocks }: MessageBlockProps): React
       return <VaultSearchBlock block={block} />;
     case 'vault_write':
       return <VaultWriteBlock block={block} />;
+    case 'browser_navigate':
+      return <BrowserNavigateBlock block={block} />;
+    case 'browser_click':
+      return <BrowserClickBlock block={block} />;
+    case 'browser_type':
+      return <BrowserTypeBlock block={block} />;
+    case 'browser_fill_form':
+      return <BrowserFillFormBlock block={block} />;
+    case 'browser_screenshot':
+      return <BrowserScreenshotBlock block={block} />;
+    case 'browser_evaluate':
+      return <BrowserEvaluateBlock block={block} />;
     default: {
       // Exhaustiveness check — TS will error here if a new kind is added
       // without a renderer branch.
