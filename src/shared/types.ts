@@ -313,6 +313,18 @@ export interface BotConfig {
   allowlist: string[];
   cron?: string;
   cronEnabled?: boolean;
+  /**
+   * Phase 6: when true (default), the daemon emits a
+   * `notification:scheduled-error` event when a cron-fired run errors.
+   * Renderer-supplied via the BotSettingsPage Schedule tab.
+   */
+  notifyOnError?: boolean;
+  /**
+   * Phase 6: custom prompt injected when the cron fires. Defaults to
+   * `'[Scheduled run] Perform your regular check-in.'` at the daemon
+   * consumer site. Capped at 4096 chars by `daemon/bots/loader.cjs`.
+   */
+  scheduledPrompt?: string;
   createdAt: string;
   updatedAt: string;
   status: BotStatus;
@@ -336,6 +348,10 @@ export interface BotCreateRequest {
   allowlist: string[];
   cron?: string;
   cronEnabled?: boolean;
+  /** Phase 6: opt in/out of scheduled-error notifications. */
+  notifyOnError?: boolean;
+  /** Phase 6: custom prompt injected on cron fire. */
+  scheduledPrompt?: string;
 }
 
 export interface BotCreateResult {
@@ -401,7 +417,14 @@ export interface BotCancelResult {
 export interface RunRecord {
   ts: string;
   runId: string;
-  trigger: 'manual';
+  /**
+   * Phase 6: source of the run.
+   *   - `manual` — user clicked Send / programmatically triggered via bots/trigger.
+   *   - `cron`   — daemon croner fired the schedule and invoked
+   *                runSendMessageCycle directly. The scheduler module writes
+   *                a RunRecord with trigger='cron' on close.
+   */
+  trigger: 'manual' | 'cron';
   durationMs: number;
   exitReason: 'completed' | 'cancelled' | 'errored';
   error?: { code: string; message: string };

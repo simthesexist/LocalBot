@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "^0.40.1",
     "@vscode/ripgrep": "1.18.0",
     "chokidar": "3.6.0",
+    "croner": "^9.1.0",
     "diff": "5.2.2",
     "react-arborist": "3.16.0",
     "react-diff-viewer-continued": "4.4.0"

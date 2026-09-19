@@ -10,6 +10,7 @@ const audit = require('./audit.cjs');
 const { createWatcher } = require('./watcher.cjs');
 const botLoader = require('./bots/loader.cjs');
 const { appendRun: appendRunRecord } = require('./runs/jsonl.cjs');
+const scheduler = require('./scheduler/index.cjs');
 
 // Phase 4 Wave 2: per-runId AbortController map for bots/trigger + bots/cancel.
 // Keyed by runId so multiple bots can run concurrently (Pitfall 10).
@@ -292,6 +293,42 @@ rl.on('line', async (line) => {
 
         const tools = registry.listTools();
         replyResult(id, { ...SERVER_INFO, tools });
+
+        // Phase 6: rehydrate cron schedules from <userData>/scheduler.json.
+        // The ctx is a frozen object so the scheduler module can't mutate
+        // the canonical maps; only the dedicated entry points may.
+        if (userDataDirState) {
+          const schedulerCtx = Object.freeze({
+            activeRuns,
+            activeRunBots,
+            appendAudit: audit.appendAudit,
+            sendNotification,
+            runSendMessageCycle,
+            appendRunRecord,
+            writeConfigPatch: botLoader.writeConfigPatch,
+            getBotScheduledPrompt: (bot) => {
+              try {
+                const cfg = botLoader.readConfig(userDataDirState, bot);
+                return cfg && typeof cfg.scheduledPrompt === 'string' && cfg.scheduledPrompt.length > 0
+                  ? cfg.scheduledPrompt
+                  : '[Scheduled run] Perform your regular check-in.';
+              } catch {
+                return '[Scheduled run] Perform your regular check-in.';
+              }
+            },
+            getBotNotifyOnError: (bot) => {
+              try {
+                const cfg = botLoader.readConfig(userDataDirState, bot);
+                return cfg ? cfg.notifyOnError !== false : true;
+              } catch {
+                return true;
+              }
+            },
+          });
+          // Fire-and-forget — loadScheduler is idempotent and any error is
+          // swallowed by the scheduler module (corrupt JSON doesn't crash).
+          void scheduler.loadScheduler(userDataDirState, schedulerCtx).catch(() => { /* ignore */ });
+        }
         break;
       }
 
@@ -667,6 +704,11 @@ rl.on('line', async (line) => {
           }
           botLoader.deleteBot(userDataDirState, botId);
 
+          // Phase 6: drop the cron schedule AFTER deleteBot succeeds. In-
+          // memory state is authoritative so a file-write failure does not
+          // leave a phantom croner task behind.
+          scheduler.removeSchedule(userDataDirState, botId);
+
           // Best-effort: remove the per-bot sessions directory.
           // The runs JSONL removal is Wave 2's responsibility (the runs
           // writer doesn't exist yet — appendRun lands with the trigger
@@ -708,6 +750,19 @@ rl.on('line', async (line) => {
           if (!botId) throw Object.assign(new Error('bot required'), { code: 'invalid_id' });
           const patch = (p.patch && typeof p.patch === 'object' && !Array.isArray(p.patch)) ? p.patch : {};
           const written = botLoader.writeConfigPatch(userDataDirState, botId, patch);
+          // Phase 6: upsert the schedule AFTER writeConfigPatch succeeds. If
+          // the patch failed (invalid_cron, etc.) upsertSchedule never runs
+          // — the failure is atomic from the renderer's view.
+          void scheduler.upsertSchedule(
+            userDataDirState,
+            botId,
+            typeof written.cron === 'string' ? written.cron : '',
+            {
+              enabled: !!written.cronEnabled,
+              notifyOnError: written.notifyOnError !== false,
+            },
+            null,
+          ).catch(() => { /* invalid cron already thrown by writeConfigPatch */ });
           // Audit minimization (T-P4-17): only record the changedKeys array.
           audit.appendAudit({
             tool: 'bots.update',
@@ -754,6 +809,13 @@ rl.on('line', async (line) => {
         activeRuns.set(runId, controller);
         activeRunBots.set(runId, botId);
 
+        // Phase 6: trigger source. 'manual' (default) for user-initiated
+        // runs; 'cron' for the scheduled-fire path. The scheduler invokes
+        // runSendMessageCycle directly (NOT through bots/trigger), so this
+        // branch is only exercised by future callers that explicitly pass
+        // trigger='cron'. Keeping the default 'manual' preserves Phase 4.
+        const trigger = (p.trigger === 'cron') ? 'cron' : 'manual';
+
         // Broadcast running status (Pitfall 9 — every transition).
         sendNotification('bot:status', { bot: botId, status: 'running', runId, ts: new Date().toISOString() });
 
@@ -764,7 +826,7 @@ rl.on('line', async (line) => {
           const record = {
             ts: new Date().toISOString(),
             runId,
-            trigger: 'manual',
+            trigger,
             durationMs: cycle.durationMs,
             exitReason: cycle.exitReason,
             messageCount: cycle.messageCount,
@@ -799,7 +861,7 @@ rl.on('line', async (line) => {
           audit.appendAudit({
             tool: 'bots.run',
             bot: botId,
-            params: { runId, trigger: 'manual', messageCount: cycle.messageCount },
+            params: { runId, trigger, messageCount: cycle.messageCount },
             outcome: cycle.exitReason === 'errored' ? 'error' : 'ok',
             durationMs: cycle.durationMs,
             error: cycle.errorPayload,
@@ -810,7 +872,7 @@ rl.on('line', async (line) => {
           audit.appendAudit({
             tool: 'bots.run',
             bot: botId,
-            params: { runId, trigger: 'manual' },
+            params: { runId, trigger },
             outcome: 'error',
             durationMs: Date.now() - startedAt,
             error: { code: err.code || 'bots_run_failed', message: err.message },
@@ -875,6 +937,15 @@ rl.on('close', async () => {
   if (activeWatcher) {
     try { await activeWatcher.stop(); } catch { /* ignore */ }
     activeWatcher = null;
+  }
+  // Phase 6: stop every croner task so a daemon restart doesn't leave a
+  // dangling setTimeout chain. In-memory state is already gone with the
+  // process so we don't need to persist on shutdown.
+  const internal = scheduler._internal;
+  if (internal && internal.schedules) {
+    for (const task of internal.schedules.values()) {
+      try { task.stop(); } catch { /* ignore */ }
+    }
   }
   process.exit(0);
 });

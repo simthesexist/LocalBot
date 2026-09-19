@@ -24,6 +24,8 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'allowlist',
   'cron',
   'cronEnabled',
+  'notifyOnError',
+  'scheduledPrompt',
   'createdAt',
   'updatedAt',
   'status',
@@ -35,6 +37,13 @@ const ALLOWED_CONFIG_KEYS = new Set([
 
 const ID_REGEX = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const SCHEMA_VERSION = 1;
+
+// Phase 6: cron expression shape. Accepts 5-field (m h dom mon dow) or
+// 6-field (s m h dom mon dow) whitespace-separated tokens. The 6-field
+// variant requires a leading seconds field. Used by validateConfig +
+// writeConfigPatch to throw `{code:'invalid_cron'}` on garbage input.
+const CRON_REGEX = /^(\S+\s+){4,5}\S+$/;
+const SCHEDULED_PROMPT_MAX = 4096;
 
 function err(code, message) {
   const e = new Error(message);
@@ -63,6 +72,23 @@ function validateConfig(cfg) {
   if (typeof cfg.name !== 'string' || cfg.name.length === 0) {
     throw err('invalid_config', 'name must be a non-empty string');
   }
+  // Phase 6: cron expression. Accept empty string (clears the schedule)
+  // but reject anything that isn't a 5- or 6-field cron expression.
+  if ('cron' in cfg && cfg.cron !== undefined && cfg.cron !== '') {
+    if (typeof cfg.cron !== 'string' || !CRON_REGEX.test(cfg.cron)) {
+      throw err('invalid_cron', `cron must be 5- or 6-field expression: ${cfg.cron}`);
+    }
+  }
+  // notifyOnError is a strict boolean.
+  if ('notifyOnError' in cfg && cfg.notifyOnError !== undefined && typeof cfg.notifyOnError !== 'boolean') {
+    throw err('invalid_config', 'notifyOnError must be boolean');
+  }
+  // scheduledPrompt is a non-empty string (or undefined) up to SCHEDULED_PROMPT_MAX chars.
+  if ('scheduledPrompt' in cfg && cfg.scheduledPrompt !== undefined) {
+    if (typeof cfg.scheduledPrompt !== 'string' || cfg.scheduledPrompt.length > SCHEDULED_PROMPT_MAX) {
+      throw err('invalid_config', `scheduledPrompt must be string (max ${SCHEDULED_PROMPT_MAX} chars)`);
+    }
+  }
 }
 
 function synthesizeDefaultBot() {
@@ -73,6 +99,7 @@ function synthesizeDefaultBot() {
     persona: '',
     workspace: '',
     allowlist: [],
+    notifyOnError: true,
     schemaVersion: SCHEMA_VERSION,
     createdAt: now,
     updatedAt: now,
@@ -314,6 +341,26 @@ function writeConfigPatch(userDataDir, bot, patch) {
   if (Object.prototype.hasOwnProperty.call(patch, 'createdAt')) {
     throw err('created_at_immutable', 'cannot change createdAt via patch');
   }
+  // Phase 6: validate cron BEFORE reading existing config so an invalid
+  // expression rejects the patch with `invalid_cron` and leaves the
+  // on-disk config.json untouched (T-P6-05).
+  if (Object.prototype.hasOwnProperty.call(patch, 'cron')) {
+    const c = patch.cron;
+    if (c !== undefined && c !== '' && (typeof c !== 'string' || !CRON_REGEX.test(c))) {
+      throw err('invalid_cron', `cron must be 5- or 6-field expression: ${c}`);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'notifyOnError')) {
+    if (patch.notifyOnError !== undefined && typeof patch.notifyOnError !== 'boolean') {
+      throw err('invalid_config', 'notifyOnError must be boolean');
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'scheduledPrompt')) {
+    const sp = patch.scheduledPrompt;
+    if (sp !== undefined && (typeof sp !== 'string' || sp.length > SCHEDULED_PROMPT_MAX)) {
+      throw err('invalid_config', `scheduledPrompt must be string (max ${SCHEDULED_PROMPT_MAX} chars)`);
+    }
+  }
 
   const existing = readConfig(userDataDir, bot);
   if (existing === null) {
@@ -354,6 +401,8 @@ function writeConfigPatch(userDataDir, bot, patch) {
 module.exports = {
   ALLOWED_CONFIG_KEYS,
   SCHEMA_VERSION,
+  CRON_REGEX,
+  SCHEDULED_PROMPT_MAX,
   deriveSlug,
   readConfig,
   writeConfig,
