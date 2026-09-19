@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BotConfig } from '../../shared/types';
 import { RunHistoryTable } from './RunHistoryTable';
+import { BotSettingsObsidianTab } from './BotSettingsObsidianTab';
 
 export interface BotSettingsPageProps {
   bot: BotConfig;
@@ -17,13 +18,18 @@ export interface BotSettingsPageProps {
   onUpdated: (bot: BotConfig) => void;
 }
 
-type TabId = 'general' | 'permissions' | 'schedule' | 'history';
-const TAB_IDS: TabId[] = ['general', 'permissions', 'schedule', 'history'];
+// Phase 7 Plan 3: 5th 'obsidian' tab — per-bot vault path + per-bot allow/
+// deny globs + the 4 vault.* tool checkboxes. Lives alongside the existing
+// general/permissions/schedule/history tabs; URL hash sync + ArrowLeft/Right
+// navigation pick it up automatically via TAB_IDS.
+type TabId = 'general' | 'permissions' | 'schedule' | 'history' | 'obsidian';
+const TAB_IDS: TabId[] = ['general', 'permissions', 'schedule', 'history', 'obsidian'];
 const TAB_LABELS: Record<TabId, string> = {
   general: 'General',
   permissions: 'Permissions',
   schedule: 'Schedule',
   history: 'Run History',
+  obsidian: 'Obsidian',
 };
 
 const TOOL_OPTIONS: Array<{ name: string; label: string }> = [
@@ -434,6 +440,15 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
         <section role="tabpanel" data-testid="bot-settings-panel-history" className="bot-settings-panel">
           <RunHistoryTable bot={bot} />
         </section>
+      )}
+
+      {activeTab === 'obsidian' && (
+        <BotSettingsObsidianTab
+          bot={bot}
+          onPatch={(patch) => void persistPatch(patch)}
+          saving={saveStatus === 'saving'}
+          error={saveStatus === 'error' ? saveError : null}
+        />
       )}
     </div>
   );

@@ -1605,3 +1605,206 @@ html, body, #root {
 .shell-stream-empty { color: #6b7280; font-size: 12px; font-style: italic; }
 
 .composer-button.send[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Phase 7 Plan 3: vault settings UI + vault block styles ─── */
+
+/* Vault read / write / search message blocks (rendered by VaultReadBlock
+ * / VaultSearchBlock / VaultWriteBlock from Phase 7 Plan 2). */
+.block-vault-read,
+.block-vault-write {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-code-bg, #f6f8fa);
+  border: 1px solid var(--color-border, #e5e7eb);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.block-vault-read.block-result-error,
+.block-vault-write.block-result-error {
+  background: var(--color-error-bg, #fef2f2);
+  border-color: #fecaca;
+  color: var(--color-error-text, #991b1b);
+}
+
+.block-vault-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.block-vault-path {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text, #111827);
+}
+
+.block-vault-bytes,
+.block-vault-bytes-written,
+.block-vault-range,
+.block-vault-truncated,
+.block-vault-match-count,
+.block-vault-query {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-muted, #6b7280);
+  font-size: 11px;
+}
+
+.block-vault-content {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  background: transparent;
+}
+
+.block-vault-search {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--color-code-bg, #f6f8fa);
+  border: 1px solid var(--color-border, #e5e7eb);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.block-vault-search-matches {
+  margin-top: 6px;
+}
+
+.block-vault-search-match {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.block-vault-search-match:last-child {
+  border-bottom: none;
+}
+
+.block-vault-match-location {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.block-vault-match-text {
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.block-vault-search-empty {
+  font-style: italic;
+  color: var(--color-text-muted, #6b7280);
+  padding: 4px 0;
+}
+
+/* BotSettingsPage Obsidian tab */
+.settings-tab-obsidian {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-tab-obsidian .form-section {
+  margin-bottom: 4px;
+}
+
+.settings-tab-obsidian .form-label {
+  display: block;
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: var(--color-text, #111827);
+}
+
+.settings-tab-obsidian .obsidian-glob-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.settings-tab-obsidian .form-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-tab-obsidian code {
+  background: var(--color-code-bg, #f6f8fa);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+/* VaultGlobalSettingsModal (lives in src/renderer/components/VaultGlobalSettingsModal.tsx) */
+.vault-global-modal .modal-card {
+  min-width: 480px;
+  max-width: 640px;
+}
+
+.vault-global-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.vault-global-modal .form-section {
+  margin-bottom: 4px;
+}
+
+.vault-global-modal .obsidian-glob-textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.vault-global-modal .form-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Top-bar Vault button — sits next to MemoryPill + SessionSwitcher in the
+ * chat-header. Matches the muted look of the existing header buttons so the
+ * top-bar doesn't visually compete with the chat surface. */
+.topbar-vault-button {
+  background: transparent;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  cursor: pointer;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.topbar-vault-button:hover {
+  color: var(--color-text, #111827);
+  border-color: var(--color-text-muted, #9ca3af);
+}
+
+.topbar-vault-button:focus-visible {
+  outline: 2px solid var(--color-accent, #2563eb);
+  outline-offset: 2px;
+}
