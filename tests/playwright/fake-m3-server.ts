@@ -1272,3 +1272,687 @@ export async function streamVaultSearchToolUse(
     },
   };
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase 8 Plan 3: streamBrowserNavigateToolUse / streamBrowserClickToolUse /
+// streamBrowserTypeToolUse / streamBrowserFillFormToolUse /
+// streamBrowserScreenshotToolUse / streamBrowserEvaluateToolUse
+//
+// Helpers used by tests/playwright/browser-automation.test.ts to drive
+// the daemon's browser.* tool surface end-to-end. Each helper binds its
+// own HTTP server on `port`, answers every POST /v1/messages with a
+// single `tool_use` SSE envelope followed by a brief assistant text
+// follow-up, then closes. The shape mirrors streamVaultReadToolUse
+// byte-for-byte so the daemon's runSendMessageCycle parses it
+// identically.
+//
+// Tool input shapes (mirrored from daemon/tools/registry.cjs SCHEMAS):
+//   - browser.navigate:    { url: string; waitUntil?: string }
+//   - browser.click:       { selector: string }
+//   - browser.type:        { selector: string; text: string; submit?: boolean }
+//   - browser.fill_form:   { fields: Array<{selector,value}>; submit?: {selector} }
+//   - browser.screenshot:  { n?: string; fullPage?: boolean }
+//   - browser.evaluate:    { expression: string }
+//
+// Per the obsidian-integration.test.ts deviation note, the daemon's
+// runSendMessageCycle does NOT currently pass `tools` to the SDK call,
+// so the helpers themselves are not invoked by the daemon-smoke tests
+// (which drive tools/call directly). They remain part of this plan's
+// deliverables for the headed Electron E2E and any future LLM-driven
+// browser test once runSendMessageCycle wires tools.
+// ────────────────────────────────────────────────────────────────────────
+
+export interface StreamBrowserNavigateOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { url: string; waitUntil?: string };
+  /** Optional assistant follow-up text (default mirrors streamCronTrigger). */
+  followupText?: string;
+}
+
+export async function streamBrowserNavigateToolUse(
+  opts: StreamBrowserNavigateOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_navigate_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.navigate complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.navigate only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_navigate_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.navigate', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserNavigateToolUse listening on 127.0.0.1:${port} for bot=${bot} url=${input.url}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+export interface StreamBrowserClickOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { selector: string };
+  followupText?: string;
+}
+
+export async function streamBrowserClickToolUse(
+  opts: StreamBrowserClickOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_click_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.click complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.click only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_click_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.click', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserClickToolUse listening on 127.0.0.1:${port} for bot=${bot} selector=${input.selector}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+export interface StreamBrowserTypeOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { selector: string; text: string; submit?: boolean };
+  followupText?: string;
+}
+
+export async function streamBrowserTypeToolUse(
+  opts: StreamBrowserTypeOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_type_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.type complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.type only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_type_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.type', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserTypeToolUse listening on 127.0.0.1:${port} for bot=${bot} selector=${input.selector}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+export interface StreamBrowserFillFormOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { fields: Array<{ selector: string; value: string }>; submit?: { selector: string } };
+  followupText?: string;
+}
+
+export async function streamBrowserFillFormToolUse(
+  opts: StreamBrowserFillFormOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_fill_form_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.fill_form complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.fill_form only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_fill_form_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.fill_form', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserFillFormToolUse listening on 127.0.0.1:${port} for bot=${bot} fields=${input.fields.length}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+export interface StreamBrowserScreenshotOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { n?: string; fullPage?: boolean };
+  followupText?: string;
+}
+
+export async function streamBrowserScreenshotToolUse(
+  opts: StreamBrowserScreenshotOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_screenshot_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.screenshot complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.screenshot only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_screenshot_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.screenshot', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserScreenshotToolUse listening on 127.0.0.1:${port} for bot=${bot} n=${input.n ?? '(default)'}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+export interface StreamBrowserEvaluateOpts {
+  bot: string;
+  port: number;
+  toolUseId?: string;
+  input: { expression: string };
+  followupText?: string;
+}
+
+export async function streamBrowserEvaluateToolUse(
+  opts: StreamBrowserEvaluateOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, input, followupText } = opts;
+  const toolUseId = opts.toolUseId ?? `toolu_browser_evaluate_${Date.now().toString(36)}`;
+  const inputJson = JSON.stringify(input);
+  const inputChunks: string[] = [];
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < inputJson.length; i += CHUNK_SIZE) {
+    inputChunks.push(inputJson.slice(i, i + CHUNK_SIZE));
+  }
+  const tokens = (followupText ?? `browser.evaluate complete for ${bot}`).split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 browser.evaluate only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_browser_evaluate_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: toolUseId, name: 'browser.evaluate', input: {} },
+        }),
+      ];
+      inputChunks.forEach((chunk) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: chunk },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 1,
+          content_block: { type: 'text', text: '' },
+        }),
+      );
+      tokens.forEach((tok) => {
+        chunks.push(
+          sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 1,
+            delta: { type: 'text_delta', text: tok },
+          }),
+        );
+      });
+      chunks.push(
+        sseFrame('content_block_stop', { type: 'content_block_stop', index: 1 }),
+        sseFrame('message_delta', {
+          type: 'message_delta',
+          delta: { stop_reason: 'end_turn', stop_sequence: null },
+          usage: { output_tokens: 40 },
+        }),
+        sseFrame('message_stop', { type: 'message_stop' }),
+      );
+      writeSse(res, chunks).catch(() => { /* ignore */ });
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamBrowserEvaluateToolUse listening on 127.0.0.1:${port} for bot=${bot} expressionBytes=${Buffer.byteLength(input.expression, 'utf8')}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}

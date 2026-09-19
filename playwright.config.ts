@@ -33,6 +33,10 @@ export default defineConfig({
     // Phase 7 Plan 3 added obsidian-integration.test.ts covering vault.read
     // happy / vault.write inside Agents / vault.write outside Agents refused
     // / vault.search audit minimization.
+    // Phase 8 Plan 3 added browser-automation.test.ts covering all 6
+    // browser.* tools (navigate / click / type / fill_form / screenshot /
+    // evaluate) end-to-end against a tmpfs Node http.createServer fixture
+    // + audit minimization assertions for every case (Pitfall 5).
     {
       name: 'daemon-smoke',
       testMatch: /.*\.test\.ts/,
