@@ -12,6 +12,7 @@ import type { MessageBlock as Block } from '../../shared/types';
 import { ToolUseBlock } from './ToolUseBlock';
 import { ToolResultBlock } from './ToolResultBlock';
 import { DiffView } from './DiffView';
+import { ShellStreamBlock } from './ShellStreamBlock';
 
 export interface MessageBlockProps {
   block: Block;
@@ -83,6 +84,8 @@ export function MessageBlock({ block, toolUseBlocks }: MessageBlockProps): React
           </div>
         </div>
       );
+    case 'shell_stream':
+      return <ShellStreamBlock block={block} />;
     default: {
       // Exhaustiveness check — TS will error here if a new kind is added
       // without a renderer branch.

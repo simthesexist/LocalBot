@@ -5,6 +5,8 @@ import type { AppInitPayload, BotConfig } from '../shared/types';
 import { Chat } from './components/Chat';
 import { KeyModal } from './components/KeyModal';
 import { BotSettingsPage } from './components/BotSettingsPage';
+import { ApprovalModalStack } from './components/ApprovalModalStack';
+import { attachShellEventListeners } from './state/shells';
 import { useBots } from './state/bots';
 
 export function App() {
@@ -58,6 +60,14 @@ export function App() {
     return off;
   }, []);
 
+  // Phase 5 Wave 2: attach the daemon's 3 shell event channels at the root.
+  // ApprovalModalStack reads from the resulting queue; ShellStreamBlock reads
+  // from the live stream map.
+  useEffect(() => {
+    if (!window.localbot) return;
+    return attachShellEventListeners();
+  }, []);
+
   const openSettings = useCallback((botId: string) => {
     setSettingsBotId(botId);
     setView('settings');
@@ -93,5 +103,10 @@ export function App() {
       />
     );
   }
-  return <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} onOpenSettings={openSettings} />;
+  return (
+    <>
+      <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} onOpenSettings={openSettings} />
+      <ApprovalModalStack />
+    </>
+  );
 }

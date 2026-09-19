@@ -84,3 +84,12 @@ export async function ensureUserDataDirs(): Promise<void> {
     await fs.mkdir(dir, { recursive: true });
   }
 }
+
+// Phase 5 Wave 2: per-bot always-allow list lives at
+// <userData>/bots/<bot>/alwaysAllow.json — populated atomically by the daemon
+// when the user clicks "always" on a shell approval prompt. Main mirrors the
+// file when an "allow-always" decision comes from the renderer so the IPC
+// handler never has to race the daemon's own write.
+export function alwaysAllowPath(bot: string): string {
+  return path.join(botDir(bot), 'alwaysAllow.json');
+}

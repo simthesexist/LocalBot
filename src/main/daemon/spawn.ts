@@ -526,6 +526,41 @@ export async function spawnDaemon(): Promise<void> {
   }
 }
 
+/**
+ * Phase 5 Wave 2: forward a renderer decision on a pending shell approval to
+ * the daemon. The daemon's shell/respond handler pops the pendingApprovals
+ * Map entry and resolves the Promise that exec_command is awaiting. Returns
+ * the {bot, command} pair on success so the caller can mirror the entry in
+ * the per-bot always-allow file when the decision was "allow-always".
+ *
+ * Returns null on any failure (daemon not ready, unknown shellId, timeout).
+ * The caller in src/main/ipc/shells.ts treats this as best-effort: the
+ * renderer's modal closes either way because we already dispatched the
+ * decision over IPC.
+ */
+export async function respondToShellApproval(
+  shellId: string,
+  decision: 'allow-once' | 'allow-always' | 'deny',
+): Promise<{ bot: string; command: string } | null> {
+  if (!initialized) return null;
+  const id = nextId++;
+  try {
+    const resp = await sendRequest({
+      jsonrpc: '2.0',
+      id,
+      method: 'shell/respond',
+      params: { shellId, decision },
+    });
+    const result = (resp as { result?: { bot?: string; command?: string } }).result;
+    if (result && typeof result.bot === 'string' && typeof result.command === 'string') {
+      return { bot: result.bot, command: result.command };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function stopDaemon(): Promise<void> {
   intentionalStop = true;
   initialized = false;

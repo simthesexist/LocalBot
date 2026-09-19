@@ -3,12 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMessages } from '../state/messages';
 import { useActiveBotId } from '../state/bots';
+import { useShellApprovals } from '../state/shells';
 
 export function Composer() {
   const { streaming, activeMsgId, appendUserMsg, setStreaming, setActiveMsgId } = useMessages();
   const { activeBotId } = useActiveBotId();
+  const { pending: pendingApprovals } = useShellApprovals();
   const [text, setText] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Disable Send while a shell approval is pending — the user must decide
+  // before queuing another command. Cancel/Stop remain available so an
+  // already-streaming run can be aborted.
+  const disabledByApproval = pendingApprovals.length > 0;
 
   useEffect(() => {
     const ta = taRef.current;
@@ -32,7 +39,7 @@ export function Composer() {
 
   const onSend = async () => {
     const content = text.trim();
-    if (!content || streaming) return;
+    if (!content || streaming || disabledByApproval) return;
     const msgId = crypto.randomUUID();
     appendUserMsg(content, msgId);
     setText('');
@@ -67,7 +74,7 @@ export function Composer() {
       <textarea
         ref={taRef}
         className="composer-input"
-        placeholder={streaming ? 'Streaming… press Esc to stop' : `Send a message to ${activeBotId}…`}
+        placeholder={streaming ? 'Streaming… press Esc to stop' : (disabledByApproval ? 'Awaiting shell approval…' : `Send a message to ${activeBotId}…`)}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -89,7 +96,7 @@ export function Composer() {
           className="composer-button send"
           data-testid="send-button"
           onClick={onSend}
-          disabled={text.trim().length === 0}
+          disabled={text.trim().length === 0 || disabledByApproval}
         >
           Send
         </button>

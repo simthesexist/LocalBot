@@ -20,6 +20,10 @@ const EVENT_CHANNELS = new Set<string>([
   // Phase 4 Wave 1 channels:
   CHANNELS.EVENT_BOT_LIST_UPDATED,
   CHANNELS.EVENT_BOT_STATUS,
+  // Phase 5 Wave 2: shell approval + streaming.
+  CHANNELS.EVENT_SHELL_REQUEST_APPROVAL,
+  CHANNELS.EVENT_SHELL_TOKEN,
+  CHANNELS.EVENT_SHELL_EXIT,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {
@@ -65,6 +69,13 @@ const api: LocalbotApi = {
   // after the app:init listener is registered to close the
   // did-finish-load vs React useEffect race window.
   requestAppInit: () => ipcRenderer.send(CHANNELS.REQUEST_APP_INIT),
+  // Phase 5 Wave 2: renderer decides a pending shell approval via the
+  // `shells:respond` IPC invoke. The main-process handler in
+  // src/main/ipc/shells.ts validates the decision shape and forwards it to
+  // the daemon's pendingApprovals map. Returns when the daemon acks.
+  shell: {
+    respond: (shellId, decision) => ipcRenderer.invoke(CHANNELS.SHELLS_RESPOND, { shellId, decision }),
+  },
   // Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
   // that callers (e.g. Playwright tests, future generic tools, ad-hoc dev
   // console probing) can address any registered invoke-channel by name

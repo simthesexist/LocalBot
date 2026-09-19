@@ -8,6 +8,18 @@ import { CHANNELS } from '../shared/ipc-channels';
 import { hasStoredKey } from './ipc/key';
 import { loadSession } from './sessions/jsonl';
 import { listBotsFromDisk } from './bots/config';
+import { registerShellHandlers } from './ipc/shells';
+
+// Phase 5 Wave 2: bridge the daemon's shell:* notifications to the renderer
+// (shell:request-approval, shell:token, shell:exit) and wire the
+// shells:respond invoke. Safe to call multiple times — the handler is
+// idempotent (ipcMain.handle throws if registered twice; we wrap in try).
+try {
+  registerShellHandlers();
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('registerShellHandlers failed', err);
+}
 
 // Per-window app:init trigger so the renderer can ASK main to re-send the
 // payload after its React useEffect has registered the listener. This
