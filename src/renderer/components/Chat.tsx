@@ -26,6 +26,8 @@ export interface ChatProps {
   workspaceRoot?: string;
   // Phase 4 Wave 3: opens BotSettingsPage via the App-level view setter.
   onOpenSettings?: (botId: string) => void;
+  // Phase 7 Plan 3: opens the global vault settings modal from the top-bar.
+  onOpenVault?: () => void;
 }
 
 function blocksForMessage(m: ChatMessage): MessageBlockT[] {
@@ -34,7 +36,7 @@ function blocksForMessage(m: ChatMessage): MessageBlockT[] {
   return [{ kind: 'text', text: m.content ?? '' }];
 }
 
-export function Chat({ initialMessages, initialBots, workspaceRoot = '.', onOpenSettings }: ChatProps) {
+export function Chat({ initialMessages, initialBots, workspaceRoot = '.', onOpenSettings, onOpenVault }: ChatProps) {
   const {
     messages,
     streaming,
@@ -97,6 +99,15 @@ export function Chat({ initialMessages, initialBots, workspaceRoot = '.', onOpen
       <header className="chat-header" data-testid="chat-header">
         <span className="chat-title">Localbot</span>
         <div className="chat-header-right">
+          <button
+            type="button"
+            className="topbar-vault-button"
+            onClick={() => onOpenVault?.()}
+            aria-label="Obsidian vault settings"
+            data-testid="topbar-vault-button"
+          >
+            Vault
+          </button>
           <SessionSwitcher
             bot="default"
             currentSessionId={currentSessionId}

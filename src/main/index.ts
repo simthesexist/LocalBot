@@ -8,6 +8,9 @@ import { registerHistoryHandlers } from './ipc/history';
 import { registerMemoryHandlers } from './ipc/memory';
 import { registerTreeHandlers } from './ipc/tree';
 import { registerBotHandlers } from './ipc/bots';
+// Phase 7 Plan 1: Obsidian vault config IPC handlers (VAULT_GET_CONFIG +
+// VAULT_SET_CONFIG + EVENT_VAULT_CONFIG_UPDATED broadcast).
+import { registerVaultHandlers } from './ipc/vault';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs } from './paths';
 import { appendAuditLine } from './audit/logger';
@@ -51,6 +54,8 @@ void app.whenReady().then(async () => {
   registerMemoryHandlers();
   registerTreeHandlers();
   registerBotHandlers();
+  // Phase 7 Plan 1: vault config IPC.
+  registerVaultHandlers();
 
   createMainWindow();
 

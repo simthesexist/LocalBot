@@ -66,6 +66,11 @@ export const CHANNELS = {
   // scheduled-error toast so the renderer can switch to the bot's chat pane.
   EVENT_NAVIGATE_TO_BOT: 'event:navigate-to-bot',
 
+  // Phase 7 Plan 1: Obsidian vault config get/set + change event.
+  VAULT_GET_CONFIG: 'vault:get_config',
+  VAULT_SET_CONFIG: 'vault:set_config',
+  EVENT_VAULT_CONFIG_UPDATED: 'vault:config:updated',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

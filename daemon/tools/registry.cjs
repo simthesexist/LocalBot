@@ -25,6 +25,15 @@ const TOOLS = [
   // Phase 5 Wave 1: shell execution. NOT in DEFAULT_POLICY.allowlist (opt-in
   // per bot via config.json#allowlist).
   'exec_command',
+  // Phase 7 Plan 1: Obsidian vault access (read + write). vault.search +
+  // vault.list land in Plan 07-02. NOT in DEFAULT_POLICY.allowlist — each
+  // bot opts in via its own `vaultAllow` glob list.
+  'vault.read',
+  'vault.write',
+  // Phase 7 Plan 2: ripgrep-based vault search + readdir-based vault list.
+  // Both subject to the same deny-wins glob pipeline as vault.read.
+  'vault.search',
+  'vault.list',
 ];
 
 // Tools that bypass the per-bot allowlist when called from main. The
@@ -163,6 +172,72 @@ const SCHEMAS = {
         timeoutMs: { type: 'integer', description: 'Hard timeout in ms (kills the child if exceeded).' },
       },
       required: ['command'],
+    },
+  },
+  // Phase 7 Plan 1: vault.read — read a note from the Obsidian vault. The
+  // path is vault-relative (e.g. "Projects/foo.md") or absolute inside
+  // vaultRoot. The daemon runs safe_path realpath + the deny-wins glob
+  // pipeline before any fs call.
+  'vault.read': {
+    name: 'vault.read',
+    description: 'Read a note from the Obsidian vault (subject to per-bot vaultAllow/vaultDeny + globalDeny enforcement).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Vault-relative path (e.g. "Projects/foo.md") or absolute path inside vault.' },
+        startLine: { type: 'integer', description: '1-based start line (inclusive) for slicing.' },
+        endLine: { type: 'integer', description: 'End line (inclusive) for slicing.' },
+      },
+      required: ['path'],
+    },
+  },
+  // Phase 7 Plan 1: vault.write — write a note to Agents/<bot>/ of the
+  // vault. Refuses any other path with code:'write_outside_agents' (after
+  // the safe_path realpath check). Atomic tmp + rename write.
+  'vault.write': {
+    name: 'vault.write',
+    description: 'Write a note to Agents/<bot>/ of the vault. Refuses any other path.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Vault-relative path under Agents/<bot>/ (e.g. "Agents/alpha/note.md") or absolute path inside vault.' },
+        content: { type: 'string', description: 'Full file contents to write.' },
+      },
+      required: ['path', 'content'],
+    },
+  },
+  // Phase 7 Plan 2: vault.search — ripgrep-based search across the vault.
+  // Each match is filtered through the deny-wins glob pipeline
+  // (globalDeny → vaultDeny → vaultAllow) before reaching the renderer
+  // (T-7-10). --no-follow is applied to ripgrep so symlinks outside the
+  // vault cannot leak matches (Pitfall Open Question #2).
+  'vault.search': {
+    name: 'vault.search',
+    description: 'ripgrep-based search across the vault. Returns matching lines with file path + line number + text. Subject to per-bot + global glob enforcement.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'ripgrep regex pattern.' },
+        glob: { type: 'string', description: 'Optional ripgrep --glob filter (e.g. "*.md").' },
+        max_results: { type: 'number', description: 'Cap matches returned (default 200, max 1000).' },
+      },
+      required: ['pattern'],
+    },
+  },
+  // Phase 7 Plan 2: vault.list — list entries in a vault directory. The
+  // listed dir's vault-relative path is filtered through the glob
+  // pipeline BEFORE returning entries (Plan 07-02 prohibition #4).
+  // Dirs first, then alphabetical. Hidden dirs (.obsidian, .trash)
+  // skipped unless includeHidden is true.
+  'vault.list': {
+    name: 'vault.list',
+    description: 'List entries in a vault directory. Sorted dirs-first then alphabetical. Subject to glob enforcement.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Directory path inside vault. Defaults to ".".' },
+        includeHidden: { type: 'boolean', description: 'Include dotfiles (default false).' },
+      },
     },
   },
 };

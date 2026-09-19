@@ -23,6 +23,7 @@
     "chokidar": "3.6.0",
     "croner": "^9.1.0",
     "diff": "5.2.2",
+    "picomatch": "^4.0.7",
     "playwright-core": "^1.63.0",
     "react-arborist": "3.16.0",
     "react-diff-viewer-continued": "4.4.0"
@@ -36,6 +37,7 @@
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "happy-dom": "^20.14.5",
     "playwright-chromium": "^1.63.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

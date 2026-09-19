@@ -93,3 +93,11 @@ export async function ensureUserDataDirs(): Promise<void> {
 export function alwaysAllowPath(bot: string): string {
   return path.join(botDir(bot), 'alwaysAllow.json');
 }
+
+// Phase 7 Plan 1: global Obsidian vault config lives at
+// <userData>/vault.json. The daemon owns the file (atomic tmp+rename +
+// persistQueue serialization). Main uses this helper to compose the same
+// path when wiring the IPC bridge so renderer + daemon agree.
+export function vaultConfigPath(): string {
+  return path.join(userDataDir(), 'vault.json');
+}

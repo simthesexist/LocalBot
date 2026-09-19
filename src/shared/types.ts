@@ -8,6 +8,10 @@ export type Role = 'user' | 'assistant';
 // gracefully (MessageBlock falls back to a generic renderer) so adding a
 // new kind (like `summary`) does not break older builds.
 // Phase 5 Wave 2: shell_stream variant for live stdout/stderr from exec_command.
+// Phase 7 Plan 1: vault_read + vault_write variants (vault_search lands in
+// Plan 07-02).
+// Phase 7 Plan 2: vault_search variant added. VaultReadBlock / VaultSearchBlock
+// / VaultWriteBlock render these three inline in MessageBlock dispatch.
 export type MessageBlock =
   | { kind: 'text'; text: string }
   | { kind: 'tool_use'; id: string; name: string; input: unknown }
@@ -25,6 +29,26 @@ export type MessageBlock =
       durationMs: number | null;
       isError: boolean;
       startedAt: number;
+    }
+  | {
+      kind: 'vault_read';
+      path: string;
+      content: string;
+      bytes: number;
+      startLine?: number;
+      endLine?: number;
+      truncated: boolean;
+    }
+  | {
+      kind: 'vault_search';
+      query: string;
+      matches: Array<{ path: string; line: number; text: string }>;
+      truncated: boolean;
+    }
+  | {
+      kind: 'vault_write';
+      path: string;
+      bytesWritten: number;
     };
 
 /** Phase 5 Wave 2: pending shell approval request from the daemon. */
@@ -348,6 +372,24 @@ export interface BotConfig {
    * consumer site. Capped at 4096 chars by `daemon/bots/loader.cjs`.
    */
   scheduledPrompt?: string;
+  /**
+   * Phase 7 Plan 1: optional per-bot Obsidian vault root override. When
+   * non-empty, the daemon uses this path instead of the global
+   * `<userData>/vault.json` rootPath. `null` is an explicit "no vault for
+   * this bot"; empty/undefined falls back to the global rootPath.
+   */
+  vaultPath?: string | null;
+  /**
+   * Phase 7 Plan 1: per-bot vault allowlist (picomatch globs evaluated
+   * against vault-relative paths). Empty/undefined blocks reads entirely
+   * (Pitfall: never silently allow).
+   */
+  vaultAllow?: string[];
+  /**
+   * Phase 7 Plan 1: per-bot vault denylist (picomatch globs). Evaluated
+   * AFTER globalDeny but BEFORE vaultAllow (deny-wins pipeline).
+   */
+  vaultDeny?: string[];
   createdAt: string;
   updatedAt: string;
   status: BotStatus;
@@ -466,4 +508,37 @@ export interface BotRunsResult {
   runs: RunRecord[];
   hasMore: boolean;
   error?: string;
+}
+
+// ─── Phase 7: Obsidian vault integration ──────────────────────────────────
+
+/**
+ * Phase 7 Plan 1: persisted global vault config. Mirrors the on-disk
+ * `<userData>/vault.json` shape. `rootPath` is the absolute path to the
+ * Obsidian vault on disk; `globalDeny` is an array of picomatch globs
+ * applied to every bot, evaluated BEFORE per-bot vaultDeny/vaultAllow
+ * (deny-wins precedence).
+ */
+export interface VaultGlobalConfig {
+  rootPath: string;
+  globalDeny: string[];
+}
+
+/**
+ * Phase 7 Plan 1: wire shape returned by `vault/get_config` and
+ * `vault/set_config`. `ok:false` carries an `error` string for renderer
+ * surfaces; `config` is undefined on error.
+ */
+export interface VaultConfigResult {
+  ok: boolean;
+  config?: VaultGlobalConfig;
+  error?: string;
+}
+
+/**
+ * Phase 7 Plan 1: emitted by main when the persisted vault config
+ * changes (renderer subscribes via `EVENT_VAULT_CONFIG_UPDATED`).
+ */
+export interface VaultConfigUpdatedEvent {
+  config: VaultGlobalConfig;
 }

@@ -26,8 +26,13 @@ export default defineConfig({
   },
   projects: [
     // Phase 4 Wave 3: daemon-only smoke that runs without a display. The
-    // bot-crud + multi-bot tests can opt in to this project so CI can
-    // prove the architecture without an Electron window.
+    // bot-crud + multi-bot + scheduler-notification tests opt in to this
+    // project so CI can prove the architecture without an Electron window.
+    // Phase 6 Wave 3 added scheduler-notification.test.ts covering
+    // cron happy / error / disabled / delete paths end-to-end.
+    // Phase 7 Plan 3 added obsidian-integration.test.ts covering vault.read
+    // happy / vault.write inside Agents / vault.write outside Agents refused
+    // / vault.search audit minimization.
     {
       name: 'daemon-smoke',
       testMatch: /.*\.test\.ts/,

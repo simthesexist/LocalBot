@@ -6,6 +6,7 @@ import { Chat } from './components/Chat';
 import { KeyModal } from './components/KeyModal';
 import { BotSettingsPage } from './components/BotSettingsPage';
 import { ApprovalModalStack } from './components/ApprovalModalStack';
+import { VaultGlobalSettingsModal } from './components/VaultGlobalSettingsModal';
 import { attachShellEventListeners } from './state/shells';
 import { useBots } from './state/bots';
 
@@ -17,6 +18,9 @@ export function App() {
   // Driven by URL hash so refresh preserves the open settings page.
   const [view, setView] = useState<'chat' | 'settings'>('chat');
   const [settingsBotId, setSettingsBotId] = useState<string | null>(null);
+  // Phase 7 Plan 3: top-bar Vault button → opens the global vault settings
+  // modal. Visible regardless of which bot is active (T-P7-19 mitigation).
+  const [showVaultModal, setShowVaultModal] = useState(false);
 
   // Bot store hook — needed to look up the BotConfig object by id when
   // the settings page mounts.
@@ -81,6 +85,9 @@ export function App() {
     }
   }, []);
 
+  const openVaultModal = useCallback(() => setShowVaultModal(true), []);
+  const closeVaultModal = useCallback(() => setShowVaultModal(false), []);
+
   const settingsBot = useMemo(
     () => bots.find((b) => b.id === settingsBotId) ?? initialBots.find((b) => b.id === settingsBotId) ?? null,
     [bots, initialBots, settingsBotId],
@@ -105,8 +112,16 @@ export function App() {
   }
   return (
     <>
-      <Chat initialMessages={initialMessages ?? []} initialBots={initialBots} onOpenSettings={openSettings} />
+      <Chat
+        initialMessages={initialMessages ?? []}
+        initialBots={initialBots}
+        onOpenSettings={openSettings}
+        onOpenVault={openVaultModal}
+      />
       <ApprovalModalStack />
+      {showVaultModal && (
+        <VaultGlobalSettingsModal open={showVaultModal} onClose={closeVaultModal} />
+      )}
     </>
   );
 }

@@ -11,6 +11,10 @@ const { createWatcher } = require('./watcher.cjs');
 const botLoader = require('./bots/loader.cjs');
 const { appendRun: appendRunRecord } = require('./runs/jsonl.cjs');
 const scheduler = require('./scheduler/index.cjs');
+// Phase 7 Plan 1: atomic global vault config + glob pipeline (picomatch).
+// Used by tools/call to resolve vaultRoot + globalDeny per bot, plus the
+// vault/get_config + vault/set_config JSON-RPC cases below.
+const vault = require('./vault/index.cjs');
 
 // Phase 4 Wave 2: per-runId AbortController map for bots/trigger + bots/cancel.
 // Keyed by runId so multiple bots can run concurrently (Pitfall 10).
@@ -195,6 +199,78 @@ function execCommandAuditParams(args, successResult, errPayload) {
   };
 }
 
+// Phase 7 Plan 1: per-bot vault resolution. botCfg is re-read on every
+// call (no cache, Pitfall 4 mitigation) so vault config edits take effect
+// immediately. Returns {vaultRoot, globalDeny, vaultDeny, vaultAllow, bot}
+// — when both botCfg.vaultPath and globalCfg.rootPath are empty, vaultRoot
+// is undefined so the tool handler throws vault_not_configured.
+function resolveVaultConfigForBot(botId) {
+  const cfg = currentVaultConfig || vault.defaultVaultConfig();
+  let botCfg = null;
+  if (userDataDirState && typeof botId === 'string' && botId.length > 0) {
+    try { botCfg = botLoader.readConfig(userDataDirState, botId); } catch { /* unknown bot → fall back */ }
+  }
+  let vaultRoot;
+  if (botCfg && typeof botCfg.vaultPath === 'string' && botCfg.vaultPath.length > 0) {
+    vaultRoot = botCfg.vaultPath;
+  } else if (cfg && typeof cfg.rootPath === 'string' && cfg.rootPath.length > 0) {
+    vaultRoot = cfg.rootPath;
+  }
+  return {
+    vaultRoot,
+    globalDeny: cfg && Array.isArray(cfg.globalDeny) ? cfg.globalDeny : [],
+    vaultDeny: botCfg && Array.isArray(botCfg.vaultDeny) ? botCfg.vaultDeny : [],
+    vaultAllow: botCfg && Array.isArray(botCfg.vaultAllow) ? botCfg.vaultAllow : [],
+    bot: botId,
+  };
+}
+
+// Phase 7 Plan 1: audit minimization for vault.read / vault.write.
+// NEVER include absolute vault path or rootPath. Only vault-relative path
+// + bytes (or bytesWritten). Matches the Phase 4 T-P4-22 / Phase 6 T-P6-19
+// minimization invariant (Pitfall 7).
+function vaultAuditParams(name, args, successResult) {
+  const utilBytes = (successResult && typeof successResult === 'object')
+    ? (successResult.bytes ?? successResult.bytesWritten)
+    : undefined;
+  const fallbackPath = (args && typeof args.path === 'string') ? args.path : '';
+  const relPath = successResult && typeof successResult.path === 'string'
+    ? successResult.path
+    : fallbackPath;
+  if (name === 'vault.write') {
+    return { path: relPath, bytesWritten: typeof utilBytes === 'number' ? utilBytes : 0 };
+  }
+  return { path: relPath, bytes: typeof utilBytes === 'number' ? utilBytes : 0 };
+}
+
+// Phase 7 Plan 2: vault.search audit minimization. Mirrors codeSearchAuditParams
+// shape but for vault-relative content. NEVER include match snippets or
+// absolute paths — only {query, glob, result_count, truncated}.
+function vaultSearchAuditParams(args, successResult) {
+  const resultCount = (successResult && typeof successResult.count === 'number')
+    ? successResult.count
+    : 0;
+  return {
+    query: (args && typeof args.pattern === 'string') ? args.pattern : '',
+    glob: (args && typeof args.glob === 'string') ? args.glob : null,
+    result_count: resultCount,
+    truncated: !!(successResult && successResult.truncated),
+  };
+}
+
+// Phase 7 Plan 2: vault.list audit minimization. Never include the entries
+// array — only {path: relativePath, entryCount}.
+function vaultListAuditParams(args, successResult) {
+  const fallbackPath = (args && typeof args.path === 'string') ? args.path : '';
+  const relPath = (successResult && typeof successResult.path === 'string')
+    ? successResult.path
+    : fallbackPath;
+  const entryCount = (successResult && Array.isArray(successResult.entries))
+    ? successResult.entries.length
+    : 0;
+  return { path: relPath, entryCount };
+}
+
 function reply(obj) {
   writeMessage(process.stdout, obj);
 }
@@ -232,6 +308,10 @@ let botDir = null; // Phase 3: <userData>/bots/<bot>; threaded into memory_read/
 // Latched from initialize.params.userDataDir; bots/* handlers read it to
 // locate <userData>/bots/<bot>/config.json.
 let userDataDirState = null;
+// Phase 7 Plan 1: global vault config (rootPath + globalDeny). Stashed on
+// initialize AND re-loaded after every vault/set_config so the tool handler
+// always sees fresh globalDeny (Pitfall 4: no cache).
+let currentVaultConfig = null;
 
 rl.on('line', async (line) => {
   const obj = readMessage(line);
@@ -298,6 +378,12 @@ rl.on('line', async (line) => {
         // The ctx is a frozen object so the scheduler module can't mutate
         // the canonical maps; only the dedicated entry points may.
         if (userDataDirState) {
+          // Phase 7 Plan 1: load the global vault config so vault.read /
+          // vault.write have a vaultRoot + globalDeny to thread into ctx.
+          // loadVaultConfig is defensive — missing / corrupt JSON returns
+          // the default {rootPath:'', globalDeny:[]} so the daemon never
+          // initializes into a broken state.
+          currentVaultConfig = vault.loadVaultConfig(userDataDirState);
           const schedulerCtx = Object.freeze({
             activeRuns,
             activeRunBots,
@@ -401,6 +487,11 @@ rl.on('line', async (line) => {
             notify: sendNotification,
             requestApproval,
             signal: abortController.signal,
+            // Phase 7 Plan 1: thread vaultRoot + globalDeny + vaultDeny +
+            // vaultAllow into ctx so vault.read / vault.write can resolve
+            // and evaluate the deny-wins glob pipeline per call. Re-read on
+            // every call so config edits take effect immediately.
+            ...resolveVaultConfigForBot(bot),
           });
           successResult = result;
           replyResult(id, result);
@@ -425,6 +516,18 @@ rl.on('line', async (line) => {
             auditParams = codeSearchAuditParams(args, successResult);
           } else if (name === 'exec_command') {
             auditParams = execCommandAuditParams(args, successResult, errPayload);
+          } else if (name === 'vault.read' || name === 'vault.write') {
+            // Phase 7 Plan 1: vault audit minimization (Pitfall 7). NEVER
+            // include absolute vault path or rootPath. Only vault-relative
+            // path + bytes / bytesWritten.
+            auditParams = vaultAuditParams(name, args, successResult);
+          } else if (name === 'vault.search') {
+            // Phase 7 Plan 2: query + result_count + truncated (no match
+            // snippets, no absolute paths).
+            auditParams = vaultSearchAuditParams(args, successResult);
+          } else if (name === 'vault.list') {
+            // Phase 7 Plan 2: path + entryCount (no entry names).
+            auditParams = vaultListAuditParams(args, successResult);
           } else {
             auditParams = args;
           }
@@ -922,6 +1025,100 @@ rl.on('line', async (line) => {
           replyError(id, err.code || 'bots_cancel_failed', err.message);
         }
         break;
+      }
+
+      // Phase 7 Plan 1: vault/get_config — return the persisted global
+      // vault config. Defensive: missing / corrupt JSON returns the
+      // {rootPath:'', globalDeny:[]} default (never throws to renderer).
+      case 'vault/get_config': {
+        const startedAt = Date.now();
+        try {
+          const cfg = vault.loadVaultConfig(userDataDirState || '');
+          currentVaultConfig = cfg;
+          audit.appendAudit({
+            tool: 'vault.get_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, config: cfg });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'vault.get_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'vault_get_config_failed', message: err.message },
+          });
+          replyError(id, err.code || 'vault_get_config_failed', err.message);
+        }
+        break;
+      }
+
+      // Phase 7 Plan 1: vault/set_config — validate the incoming shape
+      // and persist atomically. After save, re-read into the module-scope
+      // currentVaultConfig so the next tools/call sees the fresh globalDeny
+      // (Pitfall 4: never cache across calls).
+      case 'vault/set_config': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) {
+            throw Object.assign(new Error('daemon not initialized'), { code: 'daemon_not_initialized' });
+          }
+          const cfg = params || {};
+          if (typeof cfg.rootPath !== 'string') {
+            throw Object.assign(new Error('rootPath must be a string'), { code: 'invalid_vault_config' });
+          }
+          if (!Array.isArray(cfg.globalDeny)) {
+            throw Object.assign(new Error('globalDeny must be an array of strings'), { code: 'invalid_vault_config' });
+          }
+          for (const g of cfg.globalDeny) {
+            if (typeof g !== 'string') {
+              throw Object.assign(new Error('globalDeny entries must be strings'), { code: 'invalid_vault_config' });
+            }
+          }
+          // saveVaultConfig returns a Promise (serialized via persistQueue);
+          // we await so the renderer sees a deterministic ack. The
+          // IPC bridge in src/main/ipc/vault.ts then broadcasts
+          // EVENT_VAULT_CONFIG_UPDATED once it gets the result back.
+          vault.saveVaultConfig(userDataDirState, cfg)
+            .then((written) => {
+              currentVaultConfig = written;
+              audit.appendAudit({
+                tool: 'vault.set_config',
+                bot: currentBot,
+                params: {},
+                outcome: 'ok',
+                durationMs: Date.now() - startedAt,
+              });
+              replyResult(id, { ok: true, config: written });
+            })
+            .catch((err) => {
+              audit.appendAudit({
+                tool: 'vault.set_config',
+                bot: currentBot,
+                params: {},
+                outcome: 'error',
+                durationMs: Date.now() - startedAt,
+                error: { code: err.code || 'vault_set_config_failed', message: err.message },
+              });
+              replyError(id, err.code || 'vault_set_config_failed', err.message);
+            });
+          break;
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'vault.set_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'vault_set_config_failed', message: err.message },
+          });
+          replyError(id, err.code || 'vault_set_config_failed', err.message);
+          break;
+        }
       }
 
       default: {

@@ -283,13 +283,16 @@ describe('loader.deleteBot', () => {
 });
 
 describe('loader.ALLOWED_CONFIG_KEYS (schema surface)', () => {
-  it('exposes the 16 canonical keys from the plan (Phase 6 adds notifyOnError + scheduledPrompt)', () => {
-    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(16);
+  it('exposes the 19 canonical keys from the plan (Phase 6 adds notifyOnError + scheduledPrompt; Phase 7 adds vaultPath + vaultAllow + vaultDeny)', () => {
+    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(19);
     expect(loader.ALLOWED_CONFIG_KEYS.has('id')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('schemaVersion')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('allowlist')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('notifyOnError')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('scheduledPrompt')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('vaultPath')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('vaultAllow')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('vaultDeny')).toBe(true);
   });
 });
 
