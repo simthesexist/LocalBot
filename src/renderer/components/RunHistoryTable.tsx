@@ -57,11 +57,15 @@ function ErrorCell({ message }: { message?: string }) {
 }
 
 function Row({ record }: { record: RunRecord }) {
+  // Phase 6 Wave 3: cron-triggered runs get a distinct badge label so
+  // the user can scan the table and see which rows came from the
+  // scheduler vs a manual Send.
+  const triggerLabel = record.trigger === 'cron' ? 'Cron' : 'Manual';
   return (
-    <tr className="run-history-row" data-exitreason={record.exitReason} data-runid={record.runId}>
+    <tr className="run-history-row" data-exitreason={record.exitReason} data-runid={record.runId} data-trigger={record.trigger}>
       <td className="run-history-cell-ts">{formatRelative(record.ts)}</td>
       <td className="run-history-cell-trigger">
-        <span className="run-history-trigger-badge">{record.trigger}</span>
+        <span className="run-history-trigger-badge" data-trigger={record.trigger}>{triggerLabel}</span>
       </td>
       <td className="run-history-cell-duration">{formatDuration(record.durationMs)}</td>
       <td className="run-history-cell-exitreason">

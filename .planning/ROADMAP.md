@@ -7,7 +7,7 @@
 - [ ] **Phase 3: Memory + Conversation History** - Persistent markdown+JSON memory, JSONL history, token-budget summarization, workspace file tree
 - [ ] **Phase 4: Multi-Bot CRUD + Sidebar** - Create/list/edit/delete/run/cancel bots with sidebar, modals, settings, run history
 - [x] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
-- [ ] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
+- [x] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
 - [ ] **Phase 7: Obsidian Integration** - Hybrid vault access (read-anywhere, write-agents-only) with glob enforcement + vault search
 - [ ] **Phase 8: Browser Automation** - Playwright-driven browser tools (navigate, click, type, fill, screenshot, evaluate)
 - [ ] **Phase 9: Phone Reach + Ship** - Tailscale-friendly HTTP/WS control endpoint + Windows .exe packaging with manual update
@@ -136,7 +136,14 @@ Plans:
   3. User can enable/disable each bot's schedule independently
   4. A system notification fires when a scheduled bot errors, and each bot can opt in or out of notifications
 
-**Plans**: TBD
+**Plans**: 3/3 plans executed
+
+- [x] 06-01-PLAN.md
+- [x] 06-02-PLAN.md
+- [x] 06-03-PLAN.md
+- [x] `06-01-PLAN.md` — Wave 1 *(tracer)*: daemon `bots/trigger(trigger='cron')` JSON-RPC seam + croner lifecycle (`protect:true` + `__fireCronForTest__`) + scheduler.json persistence + audit JSONL minimization (T-P6-19: 3-key shape `{runId, trigger, messageCount}`) + AbortController registration pre-await (AGENT-08) + runSendMessageCycle error path notification event + scheduler_tick.test.ts + bots_update_atomic.test.ts cronEnabled off-cycle.
+- [x] `06-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: main process `spawn.ts` onNotification bridge (debounce 30s per bot) + Electron `Notification.show` integration + IPC `EVENT_NOTIFICATION_TOAST` + `notification:click` handler + `EVENT_NAVIGATE_TO_BOT` + renderer `NotificationToast` UI + `notification_click.test.ts` + `scheduler_notification.test.ts` + `fake-m3-server.ts` `streamExecCommandToolUse` extension.
+- [x] `06-03-PLAN.md` — Wave 3 *(blocked on Wave 2)*: BotSettingsPage Schedule tab `notifyOnError` + `scheduledPrompt` + cron preview (croner `nextRuns(5)`) + BotSidebar scheduled-first sort + SidebarBotRow scheduled pulse dot + RunHistoryTable trigger='cron' label + audit minimization suite (5 cases) + sidebar sort suite (6 cases) + settings schedule suite (8 cases) + Playwright `scheduler-notification.test.ts` 4-case E2E (happy/error/disabled/delete).
 **UI hint**: yes
 
 ### Phase 7: Obsidian Integration
