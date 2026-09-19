@@ -34,6 +34,13 @@ const TOOLS = [
   // Both subject to the same deny-wins glob pipeline as vault.read.
   'vault.search',
   'vault.list',
+  // Phase 8 Plan 1: browser.navigate — Playwright-backed headless Chromium
+  // navigation. Subject to per-bot URL allowlist (browserAllow) +
+  // denylist (browserDeny) + SSRF shield (RFC1918/127/169.254/IPv6
+  // link-local/ULA/loopback unless ssrfAllowInternal). NOT in
+  // DEFAULT_POLICY.allowlist — per-bot opt-in via BotSettingsBrowserTab
+  // (per RESEARCH §Architectural Responsibility Map).
+  'browser.navigate',
 ];
 
 // Tools that bypass the per-bot allowlist when called from main. The
@@ -238,6 +245,25 @@ const SCHEMAS = {
         path: { type: 'string', description: 'Directory path inside vault. Defaults to ".".' },
         includeHidden: { type: 'boolean', description: 'Include dotfiles (default false).' },
       },
+    },
+  },
+  // Phase 8 Plan 1: browser.navigate — headless Chromium navigation
+  // through Playwright. Scheme allowlist (http + https only) +
+  // DNS-resolved SSRF shield + per-bot URL allowlist/denylist. The 5
+  // remaining browser tools (click/type/fill_form/screenshot/evaluate)
+  // land in Plan 2.
+  'browser.navigate': {
+    name: 'browser.navigate',
+    description: 'Navigate to a URL in headless Chromium. Subject to URL allowlist + SSRF shield (default-deny when browserAllow is empty).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: {
+          type: 'string',
+          description: 'Absolute http(s) URL to navigate to. Scheme allowlist: http + https only.',
+        },
+      },
+      required: ['url'],
     },
   },
 };

@@ -71,6 +71,14 @@ export const CHANNELS = {
   VAULT_SET_CONFIG: 'vault:set_config',
   EVENT_VAULT_CONFIG_UPDATED: 'vault:config:updated',
 
+  // Phase 8 Plan 1: browser automation IPC surface. Renderer → main
+  // invokes (screenshots + context cleanup); main → renderer events
+  // (config updates from BotSettingsBrowserTab + page lifecycle).
+  BROWSER_GET_SCREENSHOT: 'browser:get_screenshot',
+  BROWSER_DELETE_CONTEXT: 'browser:delete_context',
+  EVENT_BROWSER_CONFIG_UPDATED: 'browser:config:updated',
+  EVENT_BROWSER_PAGE_CLOSED: 'browser:page:closed',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

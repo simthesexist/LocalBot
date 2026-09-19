@@ -19,6 +19,9 @@ import type {
   BotTriggerResult,
   BotUpdateRequest,
   BotUpdateResult,
+  BrowserDeleteContextRequest,
+  BrowserScreenshotRequest,
+  BrowserScreenshotResult,
   DaemonStatus,
   DoneEvent,
   ErrorEvent,
@@ -81,7 +84,12 @@ export type LocalbotChannel =
   | 'notification:scheduled-error'
   | 'event:navigate-to-bot'
   // Phase 7 Plan 1:
-  | 'vault:config:updated';
+  | 'vault:config:updated'
+  // Phase 8 Plan 1: browser automation channels.
+  | 'browser:get_screenshot'
+  | 'browser:delete_context'
+  | 'browser:config:updated'
+  | 'browser:page:closed';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -158,6 +166,17 @@ export interface LocalbotApi {
   vault: {
     getConfig: () => Promise<VaultConfigResult>;
     setConfig: (req: { rootPath: string; globalDeny: string[] }) => Promise<VaultConfigResult>;
+  };
+  /**
+   * Phase 8 Plan 1: browser automation IPC surface. getScreenshot
+   * resolves a screenshot PNG by runId + n; deleteContext closes + removes
+   * the per-bot BrowserContext (cookies / localStorage cleanup). The
+   * Plan 2 `app://` protocol handler backs getScreenshot; the
+   * `BrowserScreenshotResult.fileUri` carries the resolved URI.
+   */
+  browser: {
+    getScreenshot: (req: BrowserScreenshotRequest) => Promise<BrowserScreenshotResult>;
+    deleteContext: (req: BrowserDeleteContextRequest) => Promise<{ ok: boolean; error?: string }>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

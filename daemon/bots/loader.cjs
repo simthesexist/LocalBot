@@ -33,6 +33,15 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'vaultPath',
   'vaultAllow',
   'vaultDeny',
+  // Phase 8 Plan 1: per-bot browser-automation config. browserAllow +
+  // browserDeny are picomatch glob arrays evaluated against the URL
+  // pathname; empty browserAllow blocks navigation entirely (default-
+  // deny — never silently allow). ssrfAllowInternal is the explicit
+  // opt-out flag for the SSRF shield (RFC1918/127/169.254/IPv6 link-
+  // local/ULA/loopback). Used by daemon/browser/policy.cjs.
+  'browserAllow',
+  'browserDeny',
+  'ssrfAllowInternal',
   'createdAt',
   'updatedAt',
   'status',
@@ -125,6 +134,38 @@ function validateConfig(cfg) {
       if (typeof g !== 'string') {
         throw err('invalid_config', 'vaultDeny entries must be strings');
       }
+    }
+  }
+  // Phase 8 Plan 1: browserAllow + browserDeny are arrays of strings
+  // (picomatch globs evaluated against the URL pathname). Empty arrays
+  // are valid (block-all / no-deny). Non-string entries throw — a
+  // renderer that accidentally passes an object or number must not
+  // silently bypass.
+  if ('browserAllow' in cfg && cfg.browserAllow !== undefined) {
+    if (!Array.isArray(cfg.browserAllow)) {
+      throw err('invalid_config', 'browserAllow must be array of strings');
+    }
+    for (const g of cfg.browserAllow) {
+      if (typeof g !== 'string') {
+        throw err('invalid_config', 'browserAllow entries must be strings');
+      }
+    }
+  }
+  if ('browserDeny' in cfg && cfg.browserDeny !== undefined) {
+    if (!Array.isArray(cfg.browserDeny)) {
+      throw err('invalid_config', 'browserDeny must be array of strings');
+    }
+    for (const g of cfg.browserDeny) {
+      if (typeof g !== 'string') {
+        throw err('invalid_config', 'browserDeny entries must be strings');
+      }
+    }
+  }
+  // ssrfAllowInternal is a strict boolean. Opt-out flag for the SSRF
+  // shield; defaults to false when undefined.
+  if ('ssrfAllowInternal' in cfg && cfg.ssrfAllowInternal !== undefined) {
+    if (typeof cfg.ssrfAllowInternal !== 'boolean') {
+      throw err('invalid_config', 'ssrfAllowInternal must be boolean');
     }
   }
 }
@@ -433,6 +474,42 @@ function writeConfigPatch(userDataDir, bot, patch) {
           throw err('invalid_config', 'vaultDeny entries must be strings');
         }
       }
+    }
+  }
+  // Phase 8 Plan 1: per-key validation for browserAllow / browserDeny /
+  // ssrfAllowInternal. Mirrors the vaultPath / vaultAllow / vaultDeny
+  // guards above so a renderer-supplied patch with the wrong shape is
+  // rejected before any disk write.
+  if (Object.prototype.hasOwnProperty.call(patch, 'browserAllow')) {
+    const ba = patch.browserAllow;
+    if (ba !== undefined) {
+      if (!Array.isArray(ba)) {
+        throw err('invalid_config', 'browserAllow must be array of strings');
+      }
+      for (const g of ba) {
+        if (typeof g !== 'string') {
+          throw err('invalid_config', 'browserAllow entries must be strings');
+        }
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'browserDeny')) {
+    const bd = patch.browserDeny;
+    if (bd !== undefined) {
+      if (!Array.isArray(bd)) {
+        throw err('invalid_config', 'browserDeny must be array of strings');
+      }
+      for (const g of bd) {
+        if (typeof g !== 'string') {
+          throw err('invalid_config', 'browserDeny entries must be strings');
+        }
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'ssrfAllowInternal')) {
+    const sai = patch.ssrfAllowInternal;
+    if (sai !== undefined && typeof sai !== 'boolean') {
+      throw err('invalid_config', 'ssrfAllowInternal must be boolean');
     }
   }
 

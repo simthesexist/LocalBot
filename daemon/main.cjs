@@ -16,6 +16,13 @@ const scheduler = require('./scheduler/index.cjs');
 // vault/get_config + vault/set_config JSON-RPC cases below.
 const vault = require('./vault/index.cjs');
 
+// Phase 8 Plan 1: browser automation core. Provides checkBrowserUrl (URL
+// allowlist + SSRF shield), ensureBrowser (lazy Chromium launch),
+// getPage (per-bot BrowserContext), deleteContext (bots/delete cleanup).
+// Renderer never imports this — daemon-only surface (Pitfall: renderer
+// MUST NOT call ensureBrowser/getPage).
+const browser = require('./browser/index.cjs');
+
 // Phase 4 Wave 2: per-runId AbortController map for bots/trigger + bots/cancel.
 // Keyed by runId so multiple bots can run concurrently (Pitfall 10).
 const activeRuns = new Map();
@@ -271,6 +278,69 @@ function vaultListAuditParams(args, successResult) {
   return { path: relPath, entryCount };
 }
 
+// Phase 8 Plan 1: per-bot browser config resolution. Mirrors
+// resolveVaultConfigForBot — botCfg is re-read on every call (no cache,
+// Pitfall 4 mitigation) so URL-allowlist edits take effect immediately.
+// Returns {browserAllow, browserDeny, ssrfAllowInternal, screenshotDir,
+// runId, bot} — when botCfg is missing, browserAllow + browserDeny
+// default to empty arrays (so checkBrowserUrl returns reason:'no_allowlist')
+// and ssrfAllowInternal defaults to false.
+function resolveBrowserConfigForBot(botId, ctx) {
+  let botCfg = null;
+  if (userDataDirState && typeof botId === 'string' && botId.length > 0) {
+    try { botCfg = botLoader.readConfig(userDataDirState, botId); } catch { /* unknown bot → fall back */ }
+  }
+  return {
+    browserAllow: (botCfg && Array.isArray(botCfg.browserAllow)) ? botCfg.browserAllow : [],
+    browserDeny: (botCfg && Array.isArray(botCfg.browserDeny)) ? botCfg.browserDeny : [],
+    ssrfAllowInternal: !!(botCfg && botCfg.ssrfAllowInternal === true),
+    screenshotDir: path.join(userDataDirState || '', 'screenshots'),
+    runId: (ctx && typeof ctx.runId === 'string') ? ctx.runId : '',
+    bot: botId,
+  };
+}
+
+// Phase 8 Plan 1: audit minimization for browser.* tools. NEVER include
+// the full URL or query string (Pitfall 5); NEVER include rendered HTML
+// or typed text; NEVER include screenshot bytes. The audit row carries
+// only {hostname, path, status, duration_ms} for browser.navigate /
+// browser.click / browser.type, plus per-tool extras (screenshotBytes,
+// expressionBytes, fieldCount). For unknown browser.* names or malformed
+// input, hostname + path fall back to empty strings — never the raw URL.
+function browserAuditParams(name, args, successResult) {
+  const out = {
+    hostname: '',
+    path: '',
+    status: undefined,
+    duration_ms: 0,
+    screenshotBytes: undefined,
+    expressionBytes: undefined,
+    fieldCount: undefined,
+  };
+  let parsed = null;
+  const candidate = (args && typeof args.url === 'string') ? args.url : '';
+  if (candidate) {
+    try { parsed = new URL(candidate); } catch { /* malformed — leave hostname/path empty */ }
+  }
+  if (parsed) {
+    out.hostname = parsed.hostname || '';
+    out.path = parsed.pathname || '';
+  }
+  if (successResult && typeof successResult === 'object') {
+    if (typeof successResult.status === 'number') out.status = successResult.status;
+    if (typeof successResult.durationMs === 'number') out.duration_ms = successResult.durationMs;
+  }
+  if (name === 'browser.screenshot') {
+    out.screenshotBytes = (successResult && typeof successResult.bytes === 'number') ? successResult.bytes : 0;
+  } else if (name === 'browser.evaluate') {
+    const expr = (args && typeof args.expression === 'string') ? args.expression : '';
+    out.expressionBytes = Buffer.byteLength(expr, 'utf8');
+  } else if (name === 'browser.fill_form') {
+    out.fieldCount = (args && Array.isArray(args.fields)) ? args.fields.length : 0;
+  }
+  return out;
+}
+
 function reply(obj) {
   writeMessage(process.stdout, obj);
 }
@@ -312,6 +382,13 @@ let userDataDirState = null;
 // initialize AND re-loaded after every vault/set_config so the tool handler
 // always sees fresh globalDeny (Pitfall 4: no cache).
 let currentVaultConfig = null;
+// Phase 8 Plan 1: per-bot browser config lives in each bot's config.json
+// (browserAllow/browserDeny/ssrfAllowInternal). No global module-scope
+// stash because the daemon never loads browser config globally — only
+// per-call resolution via resolveBrowserConfigForBot. Mirrors how the
+// vault pattern keeps a global vaultConfig but per-bot vaultAllow/Deny
+// come from botCfg.
+let currentBrowserConfig = null;
 
 rl.on('line', async (line) => {
   const obj = readMessage(line);
@@ -492,6 +569,12 @@ rl.on('line', async (line) => {
             // and evaluate the deny-wins glob pipeline per call. Re-read on
             // every call so config edits take effect immediately.
             ...resolveVaultConfigForBot(bot),
+            // Phase 8 Plan 1: thread browserAllow + browserDeny +
+            // ssrfAllowInternal + screenshotDir + runId into ctx so
+            // browser.navigate can resolve + evaluate the URL allowlist +
+            // SSRF shield per call. Re-read on every call (no cache,
+            // Pitfall 4) so URL-allowlist edits take effect immediately.
+            ...resolveBrowserConfigForBot(bot, { runId: toolCallId }),
           });
           successResult = result;
           replyResult(id, result);
@@ -528,6 +611,15 @@ rl.on('line', async (line) => {
           } else if (name === 'vault.list') {
             // Phase 7 Plan 2: path + entryCount (no entry names).
             auditParams = vaultListAuditParams(args, successResult);
+          } else if (name === 'browser.navigate' || name === 'browser.click' ||
+                     name === 'browser.type' || name === 'browser.screenshot' ||
+                     name === 'browser.evaluate' || name === 'browser.fill_form' ||
+                     name.startsWith('browser.')) {
+            // Phase 8 Plan 1: browser audit minimization (T-8-02).
+            // NEVER include full URL, query string, rendered HTML, typed
+            // text, or screenshot bytes — only {hostname, path, status?,
+            // duration_ms, screenshotBytes?, expressionBytes?, fieldCount?}.
+            auditParams = browserAuditParams(name, args, successResult);
           } else {
             auditParams = args;
           }
@@ -818,6 +910,11 @@ rl.on('line', async (line) => {
           // flow in Plan 04-02).
           const sessionsPath = path.join(userDataDirState, 'sessions', botId);
           try { fs.rmSync(sessionsPath, { recursive: true, force: true }); } catch { /* ignore */ }
+
+          // Phase 8 Plan 1: close + remove the bot's per-bot BrowserContext
+          // (Pitfall 7 — cookies/localStorage cleanup). Wrapped in try/catch
+          // so a browser-side error never blocks the bots/delete ack.
+          try { await browser.deleteContext(botId); } catch { /* ignore */ }
 
           audit.appendAudit({
             tool: 'bots.delete',

@@ -49,6 +49,18 @@ export type MessageBlock =
       kind: 'vault_write';
       path: string;
       bytesWritten: number;
+    }
+  | {
+      // Phase 8 Plan 1: browser.navigate result. `url` is normalized
+      // hostname + pathname (NO query string per Pitfall 5). The remaining
+      // 5 browser_* MessageBlock variants land in Plan 2.
+      kind: 'browser_navigate';
+      url: string;
+      status: number | null;
+      title: string;
+      text: string;
+      bytes: number;
+      durationMs: number;
     };
 
 /** Phase 5 Wave 2: pending shell approval request from the daemon. */
@@ -390,6 +402,24 @@ export interface BotConfig {
    * AFTER globalDeny but BEFORE vaultAllow (deny-wins pipeline).
    */
   vaultDeny?: string[];
+  /**
+   * Phase 8 Plan 1: per-bot URL allowlist for browser.navigate +
+   * (later) browser.click / browser.type / browser.fill_form. picomatch
+   * globs evaluated against the URL pathname. Empty/undefined blocks
+   * navigation entirely (default-deny — never silently allow).
+   */
+  browserAllow?: string[];
+  /**
+   * Phase 8 Plan 1: per-bot URL denylist. Evaluated AFTER SSRF shield
+   * but BEFORE browserAllow (deny-wins pipeline mirrors Phase 7 vault).
+   */
+  browserDeny?: string[];
+  /**
+   * Phase 8 Plan 1: opt-out flag for the SSRF shield. When true, RFC1918
+   * / 127.0.0.0/8 / 169.254.0.0/16 / IPv6 link-local/ULA/loopback
+   * addresses pass through checkBrowserUrl. Used for hermetic E2E + dev.
+   */
+  ssrfAllowInternal?: boolean;
   createdAt: string;
   updatedAt: string;
   status: BotStatus;
@@ -541,4 +571,42 @@ export interface VaultConfigResult {
  */
 export interface VaultConfigUpdatedEvent {
   config: VaultGlobalConfig;
+}
+
+// ─── Phase 8: browser automation ───────────────────────────────────────────
+
+/**
+ * Phase 8 Plan 1: renderer → main IPC request for fetching a screenshot
+ * PNG by `app://` URI. `runId` + `n` (filename suffix) identify the
+ * specific screenshot in `<userData>/screenshots/<runId>/<n>.png`. The
+ * Plan 2 `app://` protocol handler resolves the URI; this request is the
+ * placeholder used for the renderer-side UI hook today and the actual
+ * delivery path tomorrow.
+ */
+export interface BrowserScreenshotRequest {
+  runId: string;
+  n: string;
+}
+
+/**
+ * Phase 8 Plan 1: renderer-side result shape. `fileUri` is the
+ * `app://localhost/screenshots/<runId>/<n>.png` URI the renderer can
+ * pass to `<img src>`. `bytes` is the PNG byte count (audit-friendly
+ * counter; never the PNG bytes themselves).
+ */
+export interface BrowserScreenshotResult {
+  ok: boolean;
+  fileUri?: string;
+  bytes?: number;
+  error?: string;
+}
+
+/**
+ * Phase 8 Plan 1: renderer → main IPC request for closing + removing
+ * the bot's per-bot BrowserContext (Pitfall 7 cleanup). Useful when the
+ * renderer wants to immediately forget cookies / localStorage without
+ * deleting the bot.
+ */
+export interface BrowserDeleteContextRequest {
+  bot: string;
 }

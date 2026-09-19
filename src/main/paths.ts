@@ -101,3 +101,21 @@ export function alwaysAllowPath(bot: string): string {
 export function vaultConfigPath(): string {
   return path.join(userDataDir(), 'vault.json');
 }
+
+// Phase 8 Plan 1: per-runId screenshot directory. The daemon writes
+// PNG files into `<userData>/screenshots/<runId>/<n>.png`; main reads
+// them back through the `app://` protocol handler (Plan 2). Layout
+// mirrors `<userData>/sessions/<bot>/<sessionId>.jsonl` (Phase 3).
+export function screenshotDir(): string {
+  return path.join(userDataDir(), 'screenshots');
+}
+
+export async function ensureScreenshotDir(): Promise<string> {
+  const dir = screenshotDir();
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}
+
+export function screenshotPath(runId: string, n: string): string {
+  return path.join(screenshotDir(), runId, `${n}.png`);
+}
