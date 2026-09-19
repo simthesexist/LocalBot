@@ -312,6 +312,19 @@ rl.on('line', async (line) => {
         let errPayload = undefined;
         let successResult = undefined;
         try {
+          // Phase 5 Wave 2: defense-in-depth denylist re-check. exec_command's
+          // own module-level matchesDangerous() is the primary gate, but
+          // re-validating here means a future refactor of exec_command.cjs
+          // cannot accidentally bypass the global safety net. The check is
+          // intentionally cheap (regex array of 11 patterns) and only fires
+          // for exec_command; other tools are unaffected.
+          if (name === 'exec_command') {
+            const denylist = require('./exec/denylist.cjs');
+            const m = denylist.matchesDangerous(args && typeof args.command === 'string' ? args.command : '');
+            if (m && m.hit) {
+              throw Object.assign(new Error('denylist_blocked'), { code: 'denylist_blocked' });
+            }
+          }
           // Phase 2 Wave 3: build a per-call AbortController so `tools/cancel`
           // (which kills the registered child) and `client.ts` cancel can both
           // abort in-flight tool work. The no-op signal preserves Phase 1
