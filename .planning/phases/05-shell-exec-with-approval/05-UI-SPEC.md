@@ -619,6 +619,60 @@ Phase 5 does not introduce new motion tokens. The existing transitions from `app
 
 ---
 
+## UI Considerations
+
+> State-coverage probe output for Phase 5 surfaces. 13 considerations surfaced across 5 elements; resolved against the UI-SPEC's existing state coverage + the kinds confirmed via kind-confirmation (`E1 modal+form`, `E2 list+display`, `E3 static display`, `E4 form`, `E5 list`). Empty/error state COPY stays in §Copywriting Contract; this section covers shape-rooted STATE coverage and references those rows.
+
+### E1 — Approval Modal Stack (UI-04)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| loading | dismissed | Modal mounts synchronously on IPC event; no async load state needed. Composer placeholder swap (S4) is the user-visible loading affordance while the modal is open. |
+| error | resolved (backstop) | If the `shell/approve` IPC round-trip stalls for >5 min, daemon auto-denies (RESEARCH §P5-3 timeout). UI must show a stale-modal affordance: replace the three buttons with a single disabled "Connection lost — denying…" button after 5 min of no response. Verification: visual UI-state test confirms the affordance appears on simulated timeout. |
+| overflow | resolved (explicit) | `<pre>` command preview has `max-height: 240px; overflow-y: auto` (§S1 CommandPreview). Truth: a 50-line command renders with a scrollable preview, the modal card does not grow, and the three buttons remain in view at the bottom. |
+| long-text | resolved (explicit) | Command wraps inside `<pre>` with `white-space: pre-wrap` (§S1 CommandPreview). Truth: a 500-character single-line command wraps inside the preview without horizontal overflow. |
+
+### E2 — Shell Stream Block (UI-04 inline)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| state coverage (empty → running → completed) | resolved (explicit) | Three explicit states are wired: empty shows "Waiting for output…" (existing copywriting row), running shows the blinking `▍` cursor + accumulated tokens, completed shows the exit-code footer + final cursor hide (§S2 ShellStreamStdout + ShellStreamFooter). Truth: an `exec_command` that emits no output still renders the "Waiting for output…" line until `shell:exit` arrives. |
+
+### E3 — Denylist-Blocked Inline Indicator (UI-04 / SEC-03)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| state coverage | dismissed (static display) | Single variant — no shape-rooted state coverage gap. The strip is non-interactive; the only state (rendered vs not) is controlled by whether the daemon returned `code: 'denylist_blocked'`. No further state breakdown applies. |
+
+### E4 — Composer Disabled State (UI-04)
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| empty | dismissed | Composer always has placeholder text; no empty-state gap. |
+| loading | dismissed | Composer has no async submit (LLM turn streaming is a separate concern); no loading state applies. |
+| error | dismissed | Submit errors surface via the existing `ErrorBanner` primitive (Phase 1), not via composer state. |
+| partial | dismissed | Composer is binary (enabled or disabled); no partial state applies. |
+| overflow | dismissed | Long text wraps via the existing textarea behavior (Phase 1 composer); no Phase 5-specific overflow concern. |
+| long-text | dismissed | Same as overflow — existing textarea behavior applies. |
+
+### E5 — Approval Modal Stack Behavior
+
+| Category | Status | Resolution |
+|----------|--------|------------|
+| state coverage (empty → one → many → collapsed) | resolved (explicit) | Four explicit states wired: empty (store size 0; stack unmounted), one pending (single modal at z-index 1500), many pending (each modal stacked at 1500 + N*100; only topmost captures pointer-events), collapsed (topmost responds; next surfaces automatically; underneath modals become inert) (§S5 Stack Rules). Truth: triggering 3 concurrent `exec_command` requests renders 3 stacked modals; responding to the topmost reveals the next, which captures pointer-events. |
+
+### Probe Summary
+
+- **Applicable:** 13
+- **Resolved (explicit):** 6
+- **Resolved (backstop):** 1
+- **Dismissed:** 6
+- **Unresolved (escalated to planner):** 0
+
+All applicable state considerations have been resolved against the UI-SPEC's existing contracts or explicitly dismissed with a reason. The error-state backstop (E1, "Connection lost — denying…" affordance after 5-min stall) is the only verification-gated item — implementer must wire a held-out test that simulates the stall and confirms the affordance renders.
+
+---
+
 ## Open Questions
 
 These items need user decision before the planner begins; intentionally NOT locked.
