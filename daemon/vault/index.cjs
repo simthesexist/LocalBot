@@ -5,6 +5,7 @@
 
 const config = require('./config.cjs');
 const glob = require('./glob.cjs');
+const wikilink = require('./wikilink.cjs');
 
 module.exports = {
   loadVaultConfig: config.loadVaultConfig,
@@ -13,4 +14,7 @@ module.exports = {
   defaultVaultConfig: config.defaultVaultConfig,
   checkVaultAccess: glob.checkVaultAccess,
   makeMatcher: glob.makeMatcher,
+  parseWikilinks: wikilink.parseWikilinks,
+  buildVaultIndex: wikilink.buildVaultIndex,
+  resolveWikilink: wikilink.resolveWikilink,
 };
