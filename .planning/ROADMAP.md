@@ -116,7 +116,11 @@
   3. After approval, the command's stdout/stderr appears inline in the chat
   4. "Always Allow" lets a bot re-run the same command without prompting again
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] `05-01-PLAN.md` — Daemon core tracer: denylist + alwaysAllow + exec_command + shell/approve JSON-RPC + execCommandAuditParams + 4 unit suites (exec_denylist, exec_alwaysAllow, exec_command, exec_approve).
+- [ ] `05-02-PLAN.md` — IPC + UI: ipc-channels + types + paths + spawn listeners + preload + shells.ts handler + shells state store + ApprovalModal + ApprovalModalStack + ShellStreamBlock + Composer disable + App mount + 3 unit suites.
+- [ ] `05-03-PLAN.md` — Audit + defense + E2E: daemon main.cjs denylist re-check + exec_audit.test.ts (JSONL minimization) + exec_denylist_defense.test.ts (monkey-patch) + Playwright exec-command-approval.test.ts (5 E2E cases) + fake-m3 streamExecCommandToolUse.
 **UI hint**: yes
 
 ### Phase 6: Scheduler + Notifications
