@@ -307,39 +307,11 @@ function resolveBrowserConfigForBot(botId, ctx) {
 // browser.click / browser.type, plus per-tool extras (screenshotBytes,
 // expressionBytes, fieldCount). For unknown browser.* names or malformed
 // input, hostname + path fall back to empty strings — never the raw URL.
-function browserAuditParams(name, args, successResult) {
-  const out = {
-    hostname: '',
-    path: '',
-    status: undefined,
-    duration_ms: 0,
-    screenshotBytes: undefined,
-    expressionBytes: undefined,
-    fieldCount: undefined,
-  };
-  let parsed = null;
-  const candidate = (args && typeof args.url === 'string') ? args.url : '';
-  if (candidate) {
-    try { parsed = new URL(candidate); } catch { /* malformed — leave hostname/path empty */ }
-  }
-  if (parsed) {
-    out.hostname = parsed.hostname || '';
-    out.path = parsed.pathname || '';
-  }
-  if (successResult && typeof successResult === 'object') {
-    if (typeof successResult.status === 'number') out.status = successResult.status;
-    if (typeof successResult.durationMs === 'number') out.duration_ms = successResult.durationMs;
-  }
-  if (name === 'browser.screenshot') {
-    out.screenshotBytes = (successResult && typeof successResult.bytes === 'number') ? successResult.bytes : 0;
-  } else if (name === 'browser.evaluate') {
-    const expr = (args && typeof args.expression === 'string') ? args.expression : '';
-    out.expressionBytes = Buffer.byteLength(expr, 'utf8');
-  } else if (name === 'browser.fill_form') {
-    out.fieldCount = (args && Array.isArray(args.fields)) ? args.fields.length : 0;
-  }
-  return out;
-}
+//
+// Extracted into a sibling module so unit tests can import the helper
+// without booting the entire daemon (the test plan's "if direct require
+// fails due to top-level side effects" fallback).
+const { browserAuditParams } = require('./browser/audit.cjs');
 
 function reply(obj) {
   writeMessage(process.stdout, obj);
