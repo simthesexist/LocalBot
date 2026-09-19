@@ -27,6 +27,9 @@ const EVENT_CHANNELS = new Set<string>([
   // Phase 6 Wave 2: scheduled-error toast + click-to-navigate.
   CHANNELS.EVENT_NOTIFICATION_SCHEDULED_ERROR,
   CHANNELS.EVENT_NAVIGATE_TO_BOT,
+  // Phase 7 Plan 1: vault config change event (broadcast by main when
+  // the persisted global vault config is updated via vault/set_config).
+  CHANNELS.EVENT_VAULT_CONFIG_UPDATED,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {
@@ -78,6 +81,16 @@ const api: LocalbotApi = {
   // the daemon's pendingApprovals map. Returns when the daemon acks.
   shell: {
     respond: (shellId, decision) => ipcRenderer.invoke(CHANNELS.SHELLS_RESPOND, { shellId, decision }),
+  },
+  // Phase 7 Plan 1: Obsidian vault config get/set. The main-process
+  // handler in src/main/ipc/vault.ts validates the shape and proxies to
+  // the daemon's vault/get_config + vault/set_config JSON-RPC cases. On a
+  // successful set, main broadcasts EVENT_VAULT_CONFIG_UPDATED to all
+  // windows; subscribers (renderer state/vault.ts) refresh from there.
+  vault: {
+    getConfig: () => ipcRenderer.invoke(CHANNELS.VAULT_GET_CONFIG),
+    setConfig: (req: { rootPath: string; globalDeny: string[] }) =>
+      ipcRenderer.invoke(CHANNELS.VAULT_SET_CONFIG, req),
   },
   // Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
   // that callers (e.g. Playwright tests, future generic tools, ad-hoc dev

@@ -43,6 +43,8 @@ import type {
   TreeListRequest,
   TreeListResult,
   TreeRefreshEvent,
+  VaultConfigResult,
+  VaultConfigUpdatedEvent,
 } from './types';
 
 export type LocalbotChannel =
@@ -77,7 +79,9 @@ export type LocalbotChannel =
   | 'shell:exit'
   // Phase 6 Wave 2:
   | 'notification:scheduled-error'
-  | 'event:navigate-to-bot';
+  | 'event:navigate-to-bot'
+  // Phase 7 Plan 1:
+  | 'vault:config:updated';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -99,7 +103,9 @@ export type LocalbotEventPayload =
   | ShellExitEvent
   // Phase 6 Wave 2:
   | ScheduledErrorEvent
-  | NavigateToBotEvent;
+  | NavigateToBotEvent
+  // Phase 7 Plan 1:
+  | VaultConfigUpdatedEvent;
 
 export interface LocalbotApi {
   sendMessage: (content: string, msgId: string, bot?: string) => Promise<{ ok: boolean; error?: string }>;
@@ -141,6 +147,17 @@ export interface LocalbotApi {
    */
   shell: {
     respond: (shellId: string, decision: 'allow-once' | 'allow-always' | 'deny') => Promise<void>;
+  };
+  /**
+   * Phase 7 Plan 1: Obsidian vault config get/set IPC surface. Both
+   * invocations go through `src/main/ipc/vault.ts` which proxies to the
+   * daemon's vault/get_config + vault/set_config JSON-RPC cases. On a
+   * successful set, main broadcasts EVENT_VAULT_CONFIG_UPDATED to all
+   * windows; the renderer subscribes via the generic `on` proxy.
+   */
+  vault: {
+    getConfig: () => Promise<VaultConfigResult>;
+    setConfig: (req: { rootPath: string; globalDeny: string[] }) => Promise<VaultConfigResult>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

@@ -26,6 +26,13 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'cronEnabled',
   'notifyOnError',
   'scheduledPrompt',
+  // Phase 7 Plan 1: per-bot Obsidian vault config. `vaultPath` overrides
+  // the global vault root for this bot only; `vaultAllow` / `vaultDeny`
+  // are picomatch glob arrays evaluated against vault-relative paths.
+  // Empty `vaultAllow` blocks reads (Pitfall: never silently allow).
+  'vaultPath',
+  'vaultAllow',
+  'vaultDeny',
   'createdAt',
   'updatedAt',
   'status',
@@ -87,6 +94,37 @@ function validateConfig(cfg) {
   if ('scheduledPrompt' in cfg && cfg.scheduledPrompt !== undefined) {
     if (typeof cfg.scheduledPrompt !== 'string' || cfg.scheduledPrompt.length > SCHEDULED_PROMPT_MAX) {
       throw err('invalid_config', `scheduledPrompt must be string (max ${SCHEDULED_PROMPT_MAX} chars)`);
+    }
+  }
+  // Phase 7 Plan 1: vaultPath is `null`, `undefined`, or a string. Empty
+  // string is accepted (falls back to global vault root at call time); a
+  // non-string throws so a renderer typo can't smuggle through.
+  if ('vaultPath' in cfg && cfg.vaultPath !== undefined && cfg.vaultPath !== null) {
+    if (typeof cfg.vaultPath !== 'string') {
+      throw err('invalid_config', 'vaultPath must be string or null');
+    }
+  }
+  // vaultAllow + vaultDeny are arrays of strings. Empty arrays are valid
+  // (block-all / no-deny). Non-string entries throw — a renderer that
+  // accidentally passes an object or number must not silently bypass.
+  if ('vaultAllow' in cfg && cfg.vaultAllow !== undefined) {
+    if (!Array.isArray(cfg.vaultAllow)) {
+      throw err('invalid_config', 'vaultAllow must be array of strings');
+    }
+    for (const g of cfg.vaultAllow) {
+      if (typeof g !== 'string') {
+        throw err('invalid_config', 'vaultAllow entries must be strings');
+      }
+    }
+  }
+  if ('vaultDeny' in cfg && cfg.vaultDeny !== undefined) {
+    if (!Array.isArray(cfg.vaultDeny)) {
+      throw err('invalid_config', 'vaultDeny must be array of strings');
+    }
+    for (const g of cfg.vaultDeny) {
+      if (typeof g !== 'string') {
+        throw err('invalid_config', 'vaultDeny entries must be strings');
+      }
     }
   }
 }
@@ -359,6 +397,42 @@ function writeConfigPatch(userDataDir, bot, patch) {
     const sp = patch.scheduledPrompt;
     if (sp !== undefined && (typeof sp !== 'string' || sp.length > SCHEDULED_PROMPT_MAX)) {
       throw err('invalid_config', `scheduledPrompt must be string (max ${SCHEDULED_PROMPT_MAX} chars)`);
+    }
+  }
+  // Phase 7 Plan 1: per-key validation for vaultPath / vaultAllow /
+  // vaultDeny. Mirrors the cron / notifyOnError / scheduledPrompt guards
+  // above so a renderer-supplied patch with the wrong shape is rejected
+  // before any disk write.
+  if (Object.prototype.hasOwnProperty.call(patch, 'vaultPath')) {
+    const vp = patch.vaultPath;
+    if (vp !== undefined && vp !== null && typeof vp !== 'string') {
+      throw err('invalid_config', 'vaultPath must be string or null');
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'vaultAllow')) {
+    const va = patch.vaultAllow;
+    if (va !== undefined) {
+      if (!Array.isArray(va)) {
+        throw err('invalid_config', 'vaultAllow must be array of strings');
+      }
+      for (const g of va) {
+        if (typeof g !== 'string') {
+          throw err('invalid_config', 'vaultAllow entries must be strings');
+        }
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'vaultDeny')) {
+    const vd = patch.vaultDeny;
+    if (vd !== undefined) {
+      if (!Array.isArray(vd)) {
+        throw err('invalid_config', 'vaultDeny must be array of strings');
+      }
+      for (const g of vd) {
+        if (typeof g !== 'string') {
+          throw err('invalid_config', 'vaultDeny entries must be strings');
+        }
+      }
     }
   }
 
