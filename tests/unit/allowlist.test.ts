@@ -26,12 +26,14 @@ const memoryRead = require_('../../daemon/tools/memory_read.cjs') as {
 };
 
 describe('registry.listTools', () => {
-  it('returns 15 tool schemas with input_schema objects', () => {
+  it('returns 20 tool schemas with input_schema objects', () => {
     // Phase 5 Wave 1 added exec_command (10). Phase 7 Plan 1 added
     // vault.read + vault.write (12). Plan 07-02 added vault.search +
     // vault.list (14). Phase 8 Plan 1 added browser.navigate (15).
+    // Phase 8 Plan 2 added browser.click, browser.type, browser.screenshot,
+    // browser.evaluate, browser.fill_form (20).
     const tools = registry.listTools();
-    expect(tools).toHaveLength(15);
+    expect(tools).toHaveLength(20);
     for (const t of tools) {
       expect(typeof t.name).toBe('string');
       expect(typeof t.description).toBe('string');
