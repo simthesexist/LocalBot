@@ -30,6 +30,9 @@ export default defineConfig({
     // project so CI can prove the architecture without an Electron window.
     // Phase 6 Wave 3 added scheduler-notification.test.ts covering
     // cron happy / error / disabled / delete paths end-to-end.
+    // Phase 7 Plan 3 added obsidian-integration.test.ts covering vault.read
+    // happy / vault.write inside Agents / vault.write outside Agents refused
+    // / vault.search audit minimization.
     {
       name: 'daemon-smoke',
       testMatch: /.*\.test\.ts/,
