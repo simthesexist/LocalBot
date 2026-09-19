@@ -24,6 +24,9 @@ const EVENT_CHANNELS = new Set<string>([
   CHANNELS.EVENT_SHELL_REQUEST_APPROVAL,
   CHANNELS.EVENT_SHELL_TOKEN,
   CHANNELS.EVENT_SHELL_EXIT,
+  // Phase 6 Wave 2: scheduled-error toast + click-to-navigate.
+  CHANNELS.EVENT_NOTIFICATION_SCHEDULED_ERROR,
+  CHANNELS.EVENT_NAVIGATE_TO_BOT,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {

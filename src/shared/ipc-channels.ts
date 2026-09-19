@@ -60,6 +60,12 @@ export const CHANNELS = {
   EVENT_SHELL_TOKEN: 'shell:token',
   EVENT_SHELL_EXIT: 'shell:exit',
 
+  // Phase 6 Wave 2: scheduled-error notification bridge (daemon -> main -> renderer).
+  EVENT_NOTIFICATION_SCHEDULED_ERROR: 'notification:scheduled-error',
+  // Phase 6 Wave 2: main -> renderer, fired when the user clicks the
+  // scheduled-error toast so the renderer can switch to the bot's chat pane.
+  EVENT_NAVIGATE_TO_BOT: 'event:navigate-to-bot',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

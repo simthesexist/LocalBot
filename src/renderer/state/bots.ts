@@ -78,12 +78,23 @@ function ensureDaemonSubscription(): void {
     next[idx] = updated;
     state.setBots(next);
   });
+  // Phase 6 Wave 2: when the user clicks the scheduled-error toast, main
+  // emits EVENT_NAVIGATE_TO_BOT so the renderer can switch to the errored
+  // bot's chat pane. We also re-pull the bot list so the sidebar reflects
+  // any newly-errored state the daemon may have just persisted.
+  const offNavigate = window.localbot.on('event:navigate-to-bot', (payload) => {
+    const p = payload as { botId?: string };
+    if (!p || typeof p.botId !== 'string' || p.botId.length === 0) return;
+    state.setActiveBotId(p.botId);
+    void refresh();
+  });
   // Best-effort cleanup on window unload — most React apps do not need
   // this but keeps the listener count accurate during HMR reloads.
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
       try { offList(); } catch { /* ignore */ }
       try { offStatus(); } catch { /* ignore */ }
+      try { offNavigate(); } catch { /* ignore */ }
     }, { once: true });
   }
 }
