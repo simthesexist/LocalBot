@@ -26,12 +26,12 @@
     {
       "number": "5",
       "name": "Shell Exec with Approval",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "6",
       "name": "Scheduler + Notifications",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "7",
@@ -50,9 +50,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:progress",
+    "command": "/gsd-progress",
     "label": "Show progress",
-    "reason": "Unsure of state — showing progress"
+    "reason": "Phase 6 complete — proceed to Phase 7 planning"
   },
-  "updated_at": "2026-09-19T11:40:46.858Z"
+  "updated_at": "2026-09-19T13:23:00.000Z"
 }

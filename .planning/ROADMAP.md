@@ -205,8 +205,8 @@ Plans:
 | 2. File Tools + Search + Tool System | 3/3 | Complete | 2026-09-18 |
 | 3. Memory + Conversation History | 3/3 | Complete | 2026-09-18 |
 | 4. Multi-Bot CRUD + Sidebar | 3/3 | Complete | 2026-09-18 |
-| 5. Shell Exec with Approval | 0/0 | Not started | - |
-| 6. Scheduler + Notifications | 0/0 | Not started | - |
+| 5. Shell Exec with Approval | 3/3 | Complete | 2026-09-19 |
+| 6. Scheduler + Notifications | 3/3 | Complete | 2026-09-19 |
 | 7. Obsidian Integration | 0/0 | Not started | - |
 | 8. Browser Automation | 0/0 | Not started | - |
 | 9. Phone Reach + Ship | 0/0 | Not started | - |
