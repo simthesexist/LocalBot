@@ -283,10 +283,12 @@ describe('loader.deleteBot', () => {
 });
 
 describe('loader.ALLOWED_CONFIG_KEYS (schema surface)', () => {
-  it('exposes the 14 canonical keys from the plan', () => {
-    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(14);
+  it('exposes the 16 canonical keys from the plan (Phase 6 adds notifyOnError + scheduledPrompt)', () => {
+    expect(loader.ALLOWED_CONFIG_KEYS.size).toBe(16);
     expect(loader.ALLOWED_CONFIG_KEYS.has('id')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('schemaVersion')).toBe(true);
     expect(loader.ALLOWED_CONFIG_KEYS.has('allowlist')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('notifyOnError')).toBe(true);
+    expect(loader.ALLOWED_CONFIG_KEYS.has('scheduledPrompt')).toBe(true);
   });
 });
