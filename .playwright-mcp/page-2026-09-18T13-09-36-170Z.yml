@@ -1,0 +1,106 @@
+- generic [ref=f4e2]:
+  - generic [ref=f4e3]:
+    - link "Skip to content" [ref=f4e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=f4e9]:
+      - heading "Navigation Menu" [level=2] [ref=f4e10]
+      - generic [ref=f4e12]:
+        - button "Toggle navigation" [ref=f4e14] [cursor=pointer]
+        - link "Homepage" [ref=f4e18] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f4e21]:
+          - link "Sign in" [ref=f4e22] [cursor=pointer]:
+            - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fsimthesexist%2FLocalBot
+          - button "Appearance settings" [ref=f4e25] [cursor=pointer]
+  - main [ref=f4e32]:
+    - generic [ref=f4e33]:
+      - generic [ref=f4e34]:
+        - generic [ref=f4e36]:
+          - link "simthesexist" [ref=f4e40] [cursor=pointer]:
+            - /url: /simthesexist
+          - generic [ref=f4e41]: /
+          - strong [ref=f4e42]:
+            - link "LocalBot" [ref=f4e43] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot
+          - generic [ref=f4e44]: Public
+        - generic [ref=f4e45]:
+          - list:
+            - listitem [ref=f4e46]:
+              - link "You must be signed in to change notification settings" [ref=f4e47] [cursor=pointer]:
+                - /url: /login?return_to=%2Fsimthesexist%2FLocalBot
+                - text: Notifications
+            - listitem [ref=f4e50]:
+              - link "Fork 0" [ref=f4e51] [cursor=pointer]:
+                - /url: /login?return_to=%2Fsimthesexist%2FLocalBot
+                - text: Fork
+                - generic "0" [ref=f4e54]
+            - listitem [ref=f4e55]:
+              - link "You must be signed in to star a repository" [ref=f4e57] [cursor=pointer]:
+                - /url: /login?return_to=%2Fsimthesexist%2FLocalBot
+                - text: Star
+                - generic "0 users starred this repository" [ref=f4e60]: "0"
+      - navigation "Repository" [ref=f4e61]:
+        - list [ref=f4e62]:
+          - listitem [ref=f4e63]:
+            - link "Code" [ref=f4e64] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot
+          - listitem [ref=f4e68]:
+            - link "Issues" [ref=f4e69] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/issues
+          - listitem [ref=f4e74]:
+            - link "Pull requests" [ref=f4e75] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulls
+          - listitem [ref=f4e79]:
+            - link "Actions" [ref=f4e80] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/actions
+          - listitem [ref=f4e84]:
+            - link "Projects" [ref=f4e85] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/projects
+          - listitem [ref=f4e89]:
+            - link "Security and quality" [ref=f4e90] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/security
+          - listitem [ref=f4e94]:
+            - link "Insights" [ref=f4e95] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulse
+    - generic [ref=f4e102]:
+      - heading "This repository is empty." [level=3] [ref=f4e106]
+      - paragraph [ref=f4e107]:
+        - text: Care to check out the
+        - link "GitHub Channel on YouTube" [ref=f4e108] [cursor=pointer]:
+          - /url: https://youtube.com/GitHub
+        - text: while you wait?
+  - contentinfo [ref=f4e109]:
+    - heading "Footer" [level=2] [ref=f4e110]
+    - generic [ref=f4e111]:
+      - generic [ref=f4e112]:
+        - link "GitHub Homepage" [ref=f4e113] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=f4e116]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=f4e117]:
+        - heading "Footer navigation" [level=3] [ref=f4e118]
+        - list "Footer navigation" [ref=f4e119]:
+          - listitem [ref=f4e120]:
+            - link "Terms" [ref=f4e121] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=f4e122]:
+            - link "Privacy" [ref=f4e123] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=f4e124]:
+            - link "Security" [ref=f4e125] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=f4e126]:
+            - link "Status" [ref=f4e127] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=f4e128]:
+            - link "Community" [ref=f4e129] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=f4e130]:
+            - link "Docs" [ref=f4e131] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=f4e132]:
+            - link "Contact" [ref=f4e133] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=f4e134]:
+            - button "Manage cookies" [ref=f4e136] [cursor=pointer]
+          - listitem [ref=f4e137]:
+            - button "Do not share my personal information" [ref=f4e139] [cursor=pointer]

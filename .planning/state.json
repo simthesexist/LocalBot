@@ -6,26 +6,22 @@
     {
       "number": "1",
       "name": "Skeleton + Streaming Chat",
-      "status": "complete",
-      "verified": "human_needed"
+      "status": "complete"
     },
     {
       "number": "2",
       "name": "File Tools + Search + Tool System",
-      "status": "complete",
-      "verified": "human_needed"
+      "status": "complete"
     },
     {
       "number": "3",
       "name": "Memory + Conversation History",
-      "status": "executed",
-      "verified": "partial",
-      "uat_status": "1/3 passing; G-3-1 + G-3-4 resolved; G-3-2 + G-3-3 separate"
+      "status": "complete"
     },
     {
       "number": "4",
       "name": "Multi-Bot CRUD + Sidebar",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "5",
@@ -54,15 +50,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-quick or /gsd-plan-phase 4",
-    "label": "Choose: close G-3-2/G-3-3 or plan Phase 4",
-    "reason": "Phase 3 executed; renderer-mount + daemon-spawn blockers closed. Both next moves unblocked."
+    "command": "/gsd:progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
   },
-  "remote": {
-    "url": "https://github.com/simthesexist/LocalBot",
-    "branch": "main",
-    "pushed_at": "2026-09-18T14:57:00.000Z",
-    "commits_pushed": 17
-  },
-  "updated_at": "2026-09-18T15:00:00.000Z"
+  "updated_at": "2026-09-19T10:32:50.958Z"
 }

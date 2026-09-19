@@ -22,6 +22,9 @@ const TOOLS = [
   'memory.write',
   'memory.update',
   'tree.list',
+  // Phase 5 Wave 1: shell execution. NOT in DEFAULT_POLICY.allowlist (opt-in
+  // per bot via config.json#allowlist).
+  'exec_command',
 ];
 
 // Tools that bypass the per-bot allowlist when called from main. The
@@ -147,6 +150,19 @@ const SCHEMAS = {
         maxEntriesPerDir: { type: 'number', description: 'Cap entries per dir (default 500).' },
         exclude: { type: 'array', items: { type: 'string' }, description: 'Names to skip (overrides default).' },
       },
+    },
+  },
+  exec_command: {
+    name: 'exec_command',
+    description: 'Run a shell command. Subject to the global denylist + per-bot allowlist + per-bot always-allow + approval gate. Returns exitCode, stdoutBytes, stderrCount.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Shell command to run (cmd.exe on Windows, /bin/sh on POSIX).' },
+        cwd: { type: 'string', description: 'Working directory. Defaults to the daemon cwd.' },
+        timeoutMs: { type: 'integer', description: 'Hard timeout in ms (kills the child if exceeded).' },
+      },
+      required: ['command'],
     },
   },
 };

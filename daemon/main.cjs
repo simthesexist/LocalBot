@@ -123,6 +123,12 @@ const pendingReady = { resolve: null, reject: null };
 // tool work (Pitfall 3 — cancel propagation). Keyed by params.toolCallId.
 const abortControllers = new Map();
 
+// Phase 5 Wave 1: pending shell approvals. The Promise lives here (canonical
+// state) so a `shell/respond` JSON-RPC reply can resolve it from the main
+// thread, regardless of which worker the tool's call() landed in.
+const pendingApprovals = new Map(); // shellId -> { resolve, reject, timer, command, bot }
+const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
+
 function ensureAbortController(toolCallId) {
   if (!toolCallId) {
     // No toolCallId → no-op controller; tools that ignore `signal` still work.
@@ -154,6 +160,38 @@ function codeSearchAuditParams(args, successResult) {
   const audit = { pattern, glob, path, max_results };
   if (typeof resultCount === 'number') audit.result_count = resultCount;
   return audit;
+}
+
+// Phase 5 Wave 1: exec_command audit minimization (T-P5-08). The audit line
+// for exec_command MUST NEVER include the full command or stdout/stderr text.
+// Only 6 fields: command_redacted (slice 0..80), commandLength, approvedBy,
+// exitCode, stdoutBytes, stderrCount.
+function execCommandAuditParams(args, successResult, errPayload) {
+  const cmd = (args && typeof args.command === 'string') ? args.command : '';
+  let approvedBy = 'n/a';
+  let exitCode = null;
+  let stdoutBytes = 0;
+  let stderrCount = 0;
+  if (successResult && typeof successResult === 'object') {
+    if (typeof successResult.approvedBy === 'string') approvedBy = successResult.approvedBy;
+    if (typeof successResult.exitCode === 'number') exitCode = successResult.exitCode;
+    if (typeof successResult.stdoutBytes === 'number') stdoutBytes = successResult.stdoutBytes;
+    if (typeof successResult.stderrCount === 'number') stderrCount = successResult.stderrCount;
+  } else if (errPayload && typeof errPayload === 'object' && errPayload.code) {
+    // denylist_blocked / denied / approval_timeout map onto approvedBy buckets.
+    if (errPayload.code === 'denylist_blocked') approvedBy = 'denylist_blocked';
+    else if (errPayload.code === 'denied') approvedBy = 'denied';
+    else if (errPayload.code === 'approval_timeout') approvedBy = 'approval_timeout';
+    else if (errPayload.code === 'invalid_args') approvedBy = 'invalid_args';
+  }
+  return {
+    command_redacted: cmd.slice(0, 80),
+    commandLength: cmd.length,
+    approvedBy,
+    exitCode,
+    stdoutBytes,
+    stderrCount,
+  };
 }
 
 function reply(obj) {
@@ -279,11 +317,39 @@ rl.on('line', async (line) => {
           // abort in-flight tool work. The no-op signal preserves Phase 1
           // behavior for tools that don't care about cancellation.
           const abortController = ensureAbortController(toolCallId);
+          // Phase 5 Wave 1: requestApproval bridge for exec_command. The
+          // tool's call() awaits this promise; main.cjs resolves it when
+          // shell/respond arrives (or when APPROVAL_TIMEOUT_MS elapses).
+          const requestApproval = ({ command, bot: approvalBot }) => {
+            const shellId = (typeof toolCallId === 'string' && toolCallId.length > 0)
+              ? toolCallId
+              : crypto.randomUUID();
+            return new Promise((resolveApproval, rejectApproval) => {
+              const timer = setTimeout(() => {
+                if (pendingApprovals.has(shellId)) {
+                  pendingApprovals.delete(shellId);
+                  rejectApproval(Object.assign(new Error('approval timeout'), { code: 'approval_timeout' }));
+                }
+              }, APPROVAL_TIMEOUT_MS);
+              pendingApprovals.set(shellId, {
+                resolve: resolveApproval,
+                reject: rejectApproval,
+                timer,
+                command,
+                bot: approvalBot,
+                notify: sendNotification,
+              });
+              sendNotification('shell:request-approval', { shellId, command, bot: approvalBot, ts: Date.now() });
+            });
+          };
           const result = await registry.callTool(bot, name, args, {
             workspaceRoot,
             botDir,
             toolCallId,
             bot,
+            userDataDir: userDataDirState,
+            notify: sendNotification,
+            requestApproval,
             signal: abortController.signal,
           });
           successResult = result;
@@ -302,10 +368,16 @@ rl.on('line', async (line) => {
         } finally {
           // Code-search audit minimization (Pitfall 5): the matches payload
           // would blow the 1 MiB JSONL cap, so record only the params +
-          // result_count for the code_search audit line.
-          const auditParams = (name === 'code_search')
-            ? codeSearchAuditParams(args, successResult)
-            : args;
+          // result_count for the code_search audit line. exec_command audit
+          // minimization (T-P5-08): never record the full command or stdout.
+          let auditParams;
+          if (name === 'code_search') {
+            auditParams = codeSearchAuditParams(args, successResult);
+          } else if (name === 'exec_command') {
+            auditParams = execCommandAuditParams(args, successResult, errPayload);
+          } else {
+            auditParams = args;
+          }
           const durationMs = Date.now() - startedAt;
           audit.appendAudit({
             tool: name,
@@ -335,6 +407,32 @@ rl.on('line', async (line) => {
           try { ctrl.abort(); } catch { /* ignore */ }
         }
         replyResult(id, registry.cancelToolCall(toolCallId));
+        break;
+      }
+
+      // Phase 5 Wave 1: shell/respond — the renderer (via main) routes the
+      // user's modal decision back to the daemon. Resolves the pending Promise
+      // for `ctx.requestApproval` (the canonical state lives in main.cjs).
+      case 'shell/respond': {
+        const shellId = (params && typeof params.shellId === 'string') ? params.shellId : '';
+        const decision = (params && typeof params.decision === 'string') ? params.decision : '';
+        if (!shellId) {
+          replyError(id, -32602, 'missing shellId');
+          break;
+        }
+        if (!['allow-once', 'allow-always', 'deny'].includes(decision)) {
+          replyError(id, -32602, `invalid decision: ${decision}`);
+          break;
+        }
+        const entry = pendingApprovals.get(shellId);
+        if (!entry) {
+          replyError(id, 'no_such_shell', `no pending approval: ${shellId}`);
+          break;
+        }
+        pendingApprovals.delete(shellId);
+        if (entry.timer) clearTimeout(entry.timer);
+        entry.resolve({ decision, shellId, command: entry.command, bot: entry.bot });
+        replyResult(id, { ok: true });
         break;
       }
 

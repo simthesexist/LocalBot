@@ -1,0 +1,340 @@
+- generic [ref=f17e2]:
+  - generic [ref=f17e3]:
+    - link "Skip to content" [ref=f17e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner "Global navigation menu" [ref=f17e8]:
+      - generic [ref=f17e9]:
+        - generic [ref=f17e10]:
+          - button "Open menu" [ref=f17e12] [cursor=pointer]
+          - link "Homepage (g then d)" [ref=f17e15] [cursor=pointer]:
+            - /url: /
+        - generic [ref=f17e18]:
+          - navigation "Breadcrumbs" [ref=f17e19]:
+            - list [ref=f17e20]:
+              - listitem [ref=f17e21]:
+                - link "simthesexist" [ref=f17e22] [cursor=pointer]:
+                  - /url: /simthesexist
+              - listitem [ref=f17e24]:
+                - link "LocalBot" [ref=f17e25] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot
+                - button "Switch repository (alt shift r)" [ref=f17e26] [cursor=pointer]
+          - button "Open quick search dialog, type / to search (forward slash)" [ref=f17e29] [cursor=pointer]
+        - generic [ref=f17e32]:
+          - generic [ref=f17e33]:
+            - generic [ref=f17e36]:
+              - link "Chat with Copilot" [ref=f17e38] [cursor=pointer]:
+                - /url: /copilot
+              - button "Open Copilot…" [ref=f17e43] [cursor=pointer]
+            - button "Create new..." [ref=f17e45] [cursor=pointer]
+            - generic [ref=f17e47]:
+              - link "All issues" [ref=f17e48] [cursor=pointer]:
+                - /url: /issues
+              - link "All pull requests" [ref=f17e52] [cursor=pointer]:
+                - /url: /pulls
+              - link "All repositories" [ref=f17e55] [cursor=pointer]:
+                - /url: /repos
+          - link "You have no unread notifications (g then n)" [ref=f17e58] [cursor=pointer]:
+            - /url: /notifications
+          - button "Open user navigation menu" [ref=f17e62] [cursor=pointer]:
+            - img "Odd8all" [ref=f17e63]
+      - heading "Repository navigation" [level=2] [ref=f17e64]
+      - navigation "Repository" [ref=f17e65]:
+        - list [ref=f17e66]:
+          - listitem [ref=f17e67]:
+            - link "Code" [ref=f17e68] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot
+          - listitem [ref=f17e73]:
+            - link "Issues" [ref=f17e74] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/issues
+          - listitem [ref=f17e80]:
+            - link "Pull requests" [ref=f17e81] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulls
+          - listitem [ref=f17e86]:
+            - link "Agents" [ref=f17e87] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/agents?author=simthesexist
+          - listitem [ref=f17e93]:
+            - link "Actions" [ref=f17e94] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/actions
+          - listitem [ref=f17e99]:
+            - link "Projects" [ref=f17e100] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/projects
+          - listitem [ref=f17e105]:
+            - link "Wiki" [ref=f17e106] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/wiki
+          - listitem [ref=f17e111]:
+            - link "Security and quality" [ref=f17e112] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/security
+          - listitem [ref=f17e117]:
+            - link "Insights" [ref=f17e118] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulse
+          - listitem [ref=f17e123]:
+            - link "Settings" [ref=f17e124] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/settings
+        - button "More items" [ref=f17e131] [cursor=pointer]:
+          - generic [ref=f17e134]:
+            - text: More
+            - generic [ref=f17e135]: items
+  - main [ref=f17e139]:
+    - generic [ref=f17e152]:
+      - generic [ref=f17e157]:
+        - generic [ref=f17e160]:
+          - img "simthesexist" [ref=f17e161]
+          - generic "LocalBot" [ref=f17e162]:
+            - strong [ref=f17e163]:
+              - link "LocalBot" [ref=f17e164] [cursor=pointer]:
+                - /url: /simthesexist/LocalBot
+          - generic [ref=f17e165]: Public
+        - list [ref=f17e167]:
+          - listitem [ref=f17e168]:
+            - button "Pin simthesexist/LocalBot" [ref=f17e169] [cursor=pointer]:
+              - generic [ref=f17e170]: Pin
+          - listitem [ref=f17e172]:
+            - 'button "Watch: Participating in simthesexist/LocalBot. 0 users are watching this repository. Click to change subscription settings." [ref=f17e173] [cursor=pointer]':
+              - generic [ref=f17e174]:
+                - generic [ref=f17e175]: Watch
+                - generic:
+                  - generic [aria-hidden]: "0"
+                  - generic: (0)
+          - listitem [ref=f17e176]:
+            - button "You own simthesexist/LocalBot and are not a member of any organizations" [ref=f17e177]:
+              - generic [ref=f17e179]:
+                - text: Fork
+                - generic [aria-hidden] [ref=f17e180]: "0"
+                - generic [ref=f17e181]: (0)
+          - listitem [ref=f17e182]:
+            - generic [ref=f17e183]:
+              - button "Star simthesexist/LocalBot" [ref=f17e186] [cursor=pointer]:
+                - generic [ref=f17e188]:
+                  - text: Star
+                  - generic [aria-hidden] [ref=f17e189]: "0"
+                  - generic [ref=f17e190]: (0)
+              - button "Star lists" [ref=f17e192] [cursor=pointer]
+      - generic [ref=f17e195]:
+        - generic [ref=f17e198]:
+          - generic [ref=f17e199]:
+            - generic [ref=f17e200]:
+              - button "main branch" [ref=f17e202] [cursor=pointer]:
+                - generic [ref=f17e203]: main
+              - generic [ref=f17e207]:
+                - link "Go to Branches page" [ref=f17e208] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot/branches
+                - link "Go to Tags page" [ref=f17e211] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot/tags
+            - generic [ref=f17e214]:
+              - generic [ref=f17e215]:
+                - button "Go to file" [ref=f17e217] [cursor=pointer]
+                - generic [ref=f17e220]:
+                  - heading "Add file" [level=2] [ref=f17e221]
+                  - button "Add file" [ref=f17e222] [cursor=pointer]
+              - button "Code" [ref=f17e227] [cursor=pointer]
+          - generic [ref=f17e230]:
+            - generic [ref=f17e231]:
+              - generic [ref=f17e233]:
+                - heading "Latest commit" [level=2] [ref=f17e234]
+                - generic [ref=f17e237]:
+                  - heading "History" [level=2] [ref=f17e238]
+                  - link "View commit history for this file." [ref=f17e240] [cursor=pointer]:
+                    - /url: /simthesexist/LocalBot/commits/main/
+              - heading "Folders and files" [level=2] [ref=f17e242]
+              - table "Folders and files" [ref=f17e243]:
+                - rowgroup:
+                  - row "Name Last commit message Last commit date":
+                    - columnheader "Name"
+                    - columnheader "Last commit message"
+                    - columnheader "Last commit date"
+                - rowgroup [ref=f17e244]:
+                  - row ".claude, (Directory)" [ref=f17e245]:
+                    - cell [ref=f17e246]:
+                      - link ".claude, (Directory)" [ref=f17e253] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/.claude
+                        - text: .claude
+                    - cell [ref=f17e254]
+                    - cell [ref=f17e256]
+                  - row ".planning, (Directory)" [ref=f17e259]:
+                    - cell [ref=f17e260]:
+                      - link ".planning, (Directory)" [ref=f17e267] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/.planning
+                        - text: .planning
+                    - cell [ref=f17e268]
+                    - cell [ref=f17e270]
+                  - row "daemon, (Directory)" [ref=f17e273]:
+                    - cell [ref=f17e274]:
+                      - link "daemon, (Directory)" [ref=f17e281] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/daemon
+                        - text: daemon
+                    - cell [ref=f17e282]
+                    - cell [ref=f17e284]
+                  - row "research, (Directory)" [ref=f17e287]:
+                    - cell [ref=f17e288]:
+                      - link "research, (Directory)" [ref=f17e295] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/research
+                        - text: research
+                    - cell [ref=f17e296]
+                    - cell [ref=f17e298]
+                  - row "resources, (Directory)" [ref=f17e301]:
+                    - cell [ref=f17e302]:
+                      - link "resources, (Directory)" [ref=f17e309] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/resources
+                        - text: resources
+                    - cell [ref=f17e310]
+                    - cell [ref=f17e312]
+                  - row "src, (Directory)" [ref=f17e315]:
+                    - cell [ref=f17e316]:
+                      - link "src, (Directory)" [ref=f17e323] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/src
+                        - text: src
+                    - cell [ref=f17e324]
+                    - cell [ref=f17e326]
+                  - row "tests, (Directory)" [ref=f17e329]:
+                    - cell [ref=f17e330]:
+                      - link "tests, (Directory)" [ref=f17e337] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/tests
+                        - text: tests
+                    - cell [ref=f17e338]
+                    - cell [ref=f17e340]
+                  - row ".gitignore, (File)" [ref=f17e343]:
+                    - cell [ref=f17e344]:
+                      - link ".gitignore, (File)" [ref=f17e351] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/.gitignore
+                        - text: .gitignore
+                    - cell [ref=f17e352]
+                    - cell [ref=f17e354]
+                  - row ".nvmrc, (File)" [ref=f17e357]:
+                    - cell [ref=f17e358]:
+                      - link ".nvmrc, (File)" [ref=f17e365] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/.nvmrc
+                        - text: .nvmrc
+                    - cell [ref=f17e366]
+                    - cell [ref=f17e368]
+                  - row "package-lock.json, (File)" [ref=f17e371]:
+                    - cell [ref=f17e372]:
+                      - link "package-lock.json, (File)" [ref=f17e379] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/package-lock.json
+                        - text: package-lock.json
+                    - cell [ref=f17e380]
+                    - cell [ref=f17e382]
+                  - row "package.json, (File)" [ref=f17e385]:
+                    - cell [ref=f17e386]:
+                      - link "package.json, (File)" [ref=f17e393] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/package.json
+                        - text: package.json
+                    - cell [ref=f17e394]
+                    - cell [ref=f17e396]
+                  - row "playwright.config.ts, (File)" [ref=f17e399]:
+                    - cell [ref=f17e400]:
+                      - link "playwright.config.ts, (File)" [ref=f17e407] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/playwright.config.ts
+                        - text: playwright.config.ts
+                    - cell [ref=f17e408]
+                    - cell [ref=f17e410]
+                  - row "tsconfig.json, (File)" [ref=f17e413]:
+                    - cell [ref=f17e414]:
+                      - link "tsconfig.json, (File)" [ref=f17e421] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.json
+                        - text: tsconfig.json
+                    - cell [ref=f17e422]
+                    - cell [ref=f17e424]
+                  - row "tsconfig.main.json, (File)" [ref=f17e427]:
+                    - cell [ref=f17e428]:
+                      - link "tsconfig.main.json, (File)" [ref=f17e435] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.main.json
+                        - text: tsconfig.main.json
+                    - cell [ref=f17e436]
+                    - cell [ref=f17e438]
+                  - row "tsconfig.renderer.json, (File)" [ref=f17e441]:
+                    - cell [ref=f17e442]:
+                      - link "tsconfig.renderer.json, (File)" [ref=f17e449] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.renderer.json
+                        - text: tsconfig.renderer.json
+                    - cell [ref=f17e450]
+                    - cell [ref=f17e452]
+                  - row "vite.config.ts, (File)" [ref=f17e455]:
+                    - cell [ref=f17e456]:
+                      - link "vite.config.ts, (File)" [ref=f17e463] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/vite.config.ts
+                        - text: vite.config.ts
+                    - cell [ref=f17e464]
+                    - cell [ref=f17e466]
+                  - row "vitest.config.ts, (File)" [ref=f17e469]:
+                    - cell [ref=f17e470]:
+                      - link "vitest.config.ts, (File)" [ref=f17e477] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/vitest.config.ts
+                        - text: vitest.config.ts
+                    - cell [ref=f17e478]
+                    - cell [ref=f17e480]
+            - generic [ref=f17e484]:
+              - generic [ref=f17e485]:
+                - heading "Repository files navigation" [level=2] [ref=f17e486]
+                - navigation "Repository files" [ref=f17e487]:
+                  - list [ref=f17e488]:
+                    - listitem [ref=f17e489]:
+                      - link "README" [ref=f17e490] [cursor=pointer]:
+                        - /url: "#"
+              - generic [ref=f17e493]:
+                - heading "Add a README" [level=2] [ref=f17e497]
+                - paragraph [ref=f17e498]: Help people interested in this repository understand your project.
+                - link "Add a README" [ref=f17e500] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot/new/main?filename=README.md
+        - generic [ref=f17e505]:
+          - generic [ref=f17e506]:
+            - heading "About Edit repository metadata" [level=2] [ref=f17e507]:
+              - generic [ref=f17e509]:
+                - generic [ref=f17e510]: About
+                - button "Edit repository metadata" [ref=f17e511] [cursor=pointer]
+            - paragraph [ref=f17e514]: Mulit Agent workflow
+            - link "Activity" [ref=f17e516] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/activity
+            - heading "Stars" [level=3] [ref=f17e519]
+            - link [ref=f17e521] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/stargazers
+              - strong [ref=f17e525]: "0"
+              - text: stars
+            - heading "Watchers" [level=3] [ref=f17e526]
+            - link [ref=f17e528] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/watchers
+              - strong [ref=f17e532]: "0"
+              - text: watching
+            - heading "Forks" [level=3] [ref=f17e533]
+            - link [ref=f17e535] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/forks
+              - strong [ref=f17e539]: "0"
+              - text: forks
+          - heading "Releases" [level=2] [ref=f17e541]
+          - heading "Packages" [level=2] [ref=f17e545]
+          - heading "Contributors" [level=2] [ref=f17e548]
+          - heading "Languages" [level=2] [ref=f17e551]
+  - contentinfo [ref=f17e554]:
+    - heading "Footer" [level=2] [ref=f17e555]
+    - generic [ref=f17e556]:
+      - generic [ref=f17e557]:
+        - link "GitHub Homepage" [ref=f17e558] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=f17e561]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=f17e562]:
+        - heading "Footer navigation" [level=3] [ref=f17e563]
+        - list "Footer navigation" [ref=f17e564]:
+          - listitem [ref=f17e565]:
+            - link "Terms" [ref=f17e566] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=f17e567]:
+            - link "Privacy" [ref=f17e568] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=f17e569]:
+            - link "Security" [ref=f17e570] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=f17e571]:
+            - link "Status" [ref=f17e572] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=f17e573]:
+            - link "Community" [ref=f17e574] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=f17e575]:
+            - link "Docs" [ref=f17e576] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=f17e577]:
+            - link "Contact" [ref=f17e578] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=f17e579]:
+            - button "Manage cookies" [ref=f17e581] [cursor=pointer]
+          - listitem [ref=f17e582]:
+            - button "Do not share my personal information" [ref=f17e584] [cursor=pointer]

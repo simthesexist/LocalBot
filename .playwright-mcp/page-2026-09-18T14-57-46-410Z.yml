@@ -1,0 +1,604 @@
+- generic [ref=f18e2]:
+  - generic [ref=f18e3]:
+    - link "Skip to content" [ref=f18e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner "Global navigation menu" [ref=f18e8]:
+      - generic [ref=f18e9]:
+        - generic [ref=f18e10]:
+          - button "Open menu" [ref=f18e12] [cursor=pointer]
+          - link "Homepage (g then d)" [ref=f18e15] [cursor=pointer]:
+            - /url: /
+        - generic [ref=f18e18]:
+          - navigation "Breadcrumbs" [ref=f18e19]:
+            - list [ref=f18e20]:
+              - listitem [ref=f18e21]:
+                - link "simthesexist" [ref=f18e22] [cursor=pointer]:
+                  - /url: /simthesexist
+              - listitem [ref=f18e24]:
+                - link "LocalBot" [ref=f18e25] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot
+                - button "Switch repository (alt shift r)" [ref=f18e26] [cursor=pointer]
+          - button "Open quick search dialog, type / to search (forward slash)" [ref=f18e29] [cursor=pointer]
+        - generic [ref=f18e32]:
+          - generic [ref=f18e33]:
+            - generic [ref=f18e36]:
+              - link "Chat with Copilot" [ref=f18e38] [cursor=pointer]:
+                - /url: /copilot
+              - button "Open Copilot…" [ref=f18e43] [cursor=pointer]
+            - button "Create new..." [ref=f18e45] [cursor=pointer]
+            - generic [ref=f18e47]:
+              - link "All issues" [ref=f18e48] [cursor=pointer]:
+                - /url: /issues
+              - link "All pull requests" [ref=f18e52] [cursor=pointer]:
+                - /url: /pulls
+              - link "All repositories" [ref=f18e55] [cursor=pointer]:
+                - /url: /repos
+          - link "You have no unread notifications (g then n)" [ref=f18e58] [cursor=pointer]:
+            - /url: /notifications
+          - button "Open user navigation menu" [ref=f18e62] [cursor=pointer]:
+            - img "Odd8all" [ref=f18e63]
+      - heading "Repository navigation" [level=2] [ref=f18e64]
+      - navigation "Repository" [ref=f18e65]:
+        - list [ref=f18e66]:
+          - listitem [ref=f18e67]:
+            - link "Code" [ref=f18e68] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot
+          - listitem [ref=f18e73]:
+            - link "Issues" [ref=f18e74] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/issues
+          - listitem [ref=f18e80]:
+            - link "Pull requests" [ref=f18e81] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulls
+          - listitem [ref=f18e86]:
+            - link "Agents" [ref=f18e87] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/agents?author=simthesexist
+          - listitem [ref=f18e93]:
+            - link "Actions" [ref=f18e94] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/actions
+          - listitem [ref=f18e99]:
+            - link "Projects" [ref=f18e100] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/projects
+          - listitem [ref=f18e105]:
+            - link "Wiki" [ref=f18e106] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/wiki
+          - listitem [ref=f18e111]:
+            - link "Security and quality" [ref=f18e112] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/security
+          - listitem [ref=f18e117]:
+            - link "Insights" [ref=f18e118] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/pulse
+          - listitem [ref=f18e123]:
+            - link "Settings" [ref=f18e124] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/settings
+        - button "More items" [ref=f18e131] [cursor=pointer]:
+          - generic [ref=f18e134]:
+            - text: More
+            - generic [ref=f18e135]: items
+  - main [ref=f18e139]:
+    - generic [ref=f18e152]:
+      - generic [ref=f18e157]:
+        - generic [ref=f18e160]:
+          - img "simthesexist" [ref=f18e161]
+          - generic "LocalBot" [ref=f18e162]:
+            - strong [ref=f18e163]:
+              - link "LocalBot" [ref=f18e164] [cursor=pointer]:
+                - /url: /simthesexist/LocalBot
+          - generic [ref=f18e165]: Public
+        - list [ref=f18e167]:
+          - listitem [ref=f18e168]:
+            - button "Pin simthesexist/LocalBot" [ref=f18e169] [cursor=pointer]:
+              - generic [ref=f18e170]: Pin
+          - listitem [ref=f18e172]:
+            - 'button "Watch: Participating in simthesexist/LocalBot. 0 users are watching this repository. Click to change subscription settings." [ref=f18e173] [cursor=pointer]':
+              - generic [ref=f18e174]:
+                - generic [ref=f18e175]: Watch
+                - generic:
+                  - generic [aria-hidden]: "0"
+                  - generic: (0)
+          - listitem [ref=f18e176]:
+            - button "You own simthesexist/LocalBot and are not a member of any organizations" [ref=f18e177]:
+              - generic [ref=f18e179]:
+                - text: Fork
+                - generic [aria-hidden] [ref=f18e180]: "0"
+                - generic [ref=f18e181]: (0)
+          - listitem [ref=f18e182]:
+            - generic [ref=f18e183]:
+              - button "Star simthesexist/LocalBot" [ref=f18e186] [cursor=pointer]:
+                - generic [ref=f18e188]:
+                  - text: Star
+                  - generic [aria-hidden] [ref=f18e189]: "0"
+                  - generic [ref=f18e190]: (0)
+              - button "Star lists" [ref=f18e192] [cursor=pointer]
+      - generic [ref=f18e195]:
+        - generic [ref=f18e198]:
+          - generic [ref=f18e199]:
+            - generic [ref=f18e200]:
+              - button "main branch" [ref=f18e202] [cursor=pointer]:
+                - generic [ref=f18e203]: main
+              - generic [ref=f18e207]:
+                - link "Go to Branches page" [ref=f18e208] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot/branches
+                - link "Go to Tags page" [ref=f18e211] [cursor=pointer]:
+                  - /url: /simthesexist/LocalBot/tags
+            - generic [ref=f18e214]:
+              - generic [ref=f18e215]:
+                - button "Go to file" [ref=f18e217] [cursor=pointer]
+                - generic [ref=f18e220]:
+                  - heading "Add file" [level=2] [ref=f18e221]
+                  - button "Add file" [ref=f18e222] [cursor=pointer]
+              - button "Code" [ref=f18e227] [cursor=pointer]
+          - generic [ref=f18e230]:
+            - generic [ref=f18e231]:
+              - generic [ref=f18e233]:
+                - heading "Latest commit" [level=2] [ref=f18e234]
+                - generic [ref=f18e237]:
+                  - heading "History" [level=2] [ref=f18e238]
+                  - link "View commit history for this file." [ref=f18e240] [cursor=pointer]:
+                    - /url: /simthesexist/LocalBot/commits/main/
+              - heading "Folders and files" [level=2] [ref=f18e242]
+              - table "Folders and files" [ref=f18e243]:
+                - rowgroup:
+                  - row "Name Last commit message Last commit date":
+                    - columnheader "Name"
+                    - columnheader "Last commit message"
+                    - columnheader "Last commit date"
+                - rowgroup [ref=f18e244]:
+                  - row ".claude, (Directory)" [ref=f18e245]:
+                    - cell [ref=f18e246]:
+                      - link ".claude, (Directory)" [ref=f18e253] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/.claude
+                        - text: .claude
+                    - cell [ref=f18e254]
+                    - cell [ref=f18e256]
+                  - row ".planning, (Directory)" [ref=f18e259]:
+                    - cell [ref=f18e260]:
+                      - link ".planning, (Directory)" [ref=f18e267] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/.planning
+                        - text: .planning
+                    - cell [ref=f18e268]
+                    - cell [ref=f18e270]
+                  - row "daemon, (Directory)" [ref=f18e273]:
+                    - cell [ref=f18e274]:
+                      - link "daemon, (Directory)" [ref=f18e281] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/daemon
+                        - text: daemon
+                    - cell [ref=f18e282]
+                    - cell [ref=f18e284]
+                  - row "research, (Directory)" [ref=f18e287]:
+                    - cell [ref=f18e288]:
+                      - link "research, (Directory)" [ref=f18e295] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/research
+                        - text: research
+                    - cell [ref=f18e296]
+                    - cell [ref=f18e298]
+                  - row "resources, (Directory)" [ref=f18e301]:
+                    - cell [ref=f18e302]:
+                      - link "resources, (Directory)" [ref=f18e309] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/resources
+                        - text: resources
+                    - cell [ref=f18e310]
+                    - cell [ref=f18e312]
+                  - row "src, (Directory)" [ref=f18e315]:
+                    - cell [ref=f18e316]:
+                      - link "src, (Directory)" [ref=f18e323] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/src
+                        - text: src
+                    - cell [ref=f18e324]
+                    - cell [ref=f18e326]
+                  - row "tests, (Directory)" [ref=f18e329]:
+                    - cell [ref=f18e330]:
+                      - link "tests, (Directory)" [ref=f18e337] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/tree/main/tests
+                        - text: tests
+                    - cell [ref=f18e338]
+                    - cell [ref=f18e340]
+                  - row ".gitignore, (File)" [ref=f18e343]:
+                    - cell [ref=f18e344]:
+                      - link ".gitignore, (File)" [ref=f18e351] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/.gitignore
+                        - text: .gitignore
+                    - cell [ref=f18e352]
+                    - cell [ref=f18e354]
+                  - row ".nvmrc, (File)" [ref=f18e357]:
+                    - cell [ref=f18e358]:
+                      - link ".nvmrc, (File)" [ref=f18e365] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/.nvmrc
+                        - text: .nvmrc
+                    - cell [ref=f18e366]
+                    - cell [ref=f18e368]
+                  - row "README.md, (File)" [ref=f18e371]:
+                    - cell [ref=f18e372]:
+                      - link "README.md, (File)" [ref=f18e379] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/README.md
+                        - text: README.md
+                    - cell [ref=f18e380]
+                    - cell [ref=f18e382]
+                  - row "package-lock.json, (File)" [ref=f18e385]:
+                    - cell [ref=f18e386]:
+                      - link "package-lock.json, (File)" [ref=f18e393] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/package-lock.json
+                        - text: package-lock.json
+                    - cell [ref=f18e394]
+                    - cell [ref=f18e396]
+                  - row "package.json, (File)" [ref=f18e399]:
+                    - cell [ref=f18e400]:
+                      - link "package.json, (File)" [ref=f18e407] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/package.json
+                        - text: package.json
+                    - cell [ref=f18e408]
+                    - cell [ref=f18e410]
+                  - row "playwright.config.ts, (File)" [ref=f18e413]:
+                    - cell [ref=f18e414]:
+                      - link "playwright.config.ts, (File)" [ref=f18e421] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/playwright.config.ts
+                        - text: playwright.config.ts
+                    - cell [ref=f18e422]
+                    - cell [ref=f18e424]
+                  - row "tsconfig.json, (File)" [ref=f18e427]:
+                    - cell [ref=f18e428]:
+                      - link "tsconfig.json, (File)" [ref=f18e435] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.json
+                        - text: tsconfig.json
+                    - cell [ref=f18e436]
+                    - cell [ref=f18e438]
+                  - row "tsconfig.main.json, (File)" [ref=f18e441]:
+                    - cell [ref=f18e442]:
+                      - link "tsconfig.main.json, (File)" [ref=f18e449] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.main.json
+                        - text: tsconfig.main.json
+                    - cell [ref=f18e450]
+                    - cell [ref=f18e452]
+                  - row "tsconfig.renderer.json, (File)" [ref=f18e455]:
+                    - cell [ref=f18e456]:
+                      - link "tsconfig.renderer.json, (File)" [ref=f18e463] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/tsconfig.renderer.json
+                        - text: tsconfig.renderer.json
+                    - cell [ref=f18e464]
+                    - cell [ref=f18e466]
+                  - row "vite.config.ts, (File)" [ref=f18e469]:
+                    - cell [ref=f18e470]:
+                      - link "vite.config.ts, (File)" [ref=f18e477] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/vite.config.ts
+                        - text: vite.config.ts
+                    - cell [ref=f18e478]
+                    - cell [ref=f18e480]
+                  - row "vitest.config.ts, (File)" [ref=f18e483]:
+                    - cell [ref=f18e484]:
+                      - link "vitest.config.ts, (File)" [ref=f18e491] [cursor=pointer]:
+                        - /url: /simthesexist/LocalBot/blob/main/vitest.config.ts
+                        - text: vitest.config.ts
+                    - cell [ref=f18e492]
+                    - cell [ref=f18e494]
+            - generic [ref=f18e498]:
+              - generic [ref=f18e499]:
+                - heading "Repository files navigation" [level=2] [ref=f18e500]
+                - navigation "Repository files" [ref=f18e501]:
+                  - list [ref=f18e502]:
+                    - listitem [ref=f18e503]:
+                      - link "README" [ref=f18e504] [cursor=pointer]:
+                        - /url: "#"
+                - button "Edit file" [ref=f18e506] [cursor=pointer]
+                - button "Outline" [ref=f18e509] [cursor=pointer]
+              - article [ref=f18e513]:
+                - generic [ref=f18e514]:
+                  - heading "Localbot" [level=1] [ref=f18e515]
+                  - 'link "Permalink: Localbot" [ref=f18e516] [cursor=pointer]':
+                    - /url: "#localbot"
+                - blockquote [ref=f18e519]:
+                  - paragraph [ref=f18e520]: Local-first desktop AI agent app. Create and run multiple specialized AI bots — each with its own persona, toolset, workspace, and persistent memory — that read and edit files, run shell commands, search code, and drive a browser, all on your own PC.
+                - paragraph [ref=f18e521]:
+                  - strong [ref=f18e522]: "Core value:"
+                  - text: a private, persistent, multi-agent AI coding/dev assistant that knows your codebase, learns from prior runs, and never leaves your machine.
+                - separator [ref=f18e523]
+                - generic [ref=f18e524]:
+                  - heading "Status" [level=2] [ref=f18e525]
+                  - 'link "Permalink: Status" [ref=f18e526] [cursor=pointer]':
+                    - /url: "#status"
+                - paragraph [ref=f18e529]:
+                  - strong [ref=f18e530]: Early development — Phase 3 of 9 complete
+                  - text: (skeleton + streaming chat + tool system + memory + conversation history).
+                - table [ref=f18e532]:
+                  - rowgroup [ref=f18e533]:
+                    - row [ref=f18e534]:
+                      - columnheader "Phase" [ref=f18e535]
+                      - columnheader "Name" [ref=f18e536]
+                      - columnheader "Status" [ref=f18e537]
+                  - rowgroup [ref=f18e538]:
+                    - row [ref=f18e539]:
+                      - cell "1" [ref=f18e540]
+                      - cell "Skeleton + Streaming Chat" [ref=f18e541]
+                      - cell "✅" [ref=f18e542]
+                    - row [ref=f18e543]:
+                      - cell "2" [ref=f18e544]
+                      - cell "File Tools + Search + Tool System" [ref=f18e545]
+                      - cell "✅" [ref=f18e546]
+                    - row [ref=f18e547]:
+                      - cell "3" [ref=f18e548]
+                      - cell "Memory + Conversation History" [ref=f18e549]
+                      - cell "✅" [ref=f18e550]
+                    - row [ref=f18e551]:
+                      - cell "4" [ref=f18e552]
+                      - cell "Multi-Bot CRUD + Sidebar" [ref=f18e553]
+                      - cell "— pending" [ref=f18e554]
+                    - row [ref=f18e555]:
+                      - cell "5" [ref=f18e556]
+                      - cell "Shell Exec with Approval" [ref=f18e557]
+                      - cell "— pending" [ref=f18e558]
+                    - row [ref=f18e559]:
+                      - cell "6" [ref=f18e560]
+                      - cell "Scheduler + Notifications" [ref=f18e561]
+                      - cell "— pending" [ref=f18e562]
+                    - row [ref=f18e563]:
+                      - cell "7" [ref=f18e564]
+                      - cell "Obsidian Integration" [ref=f18e565]
+                      - cell "— pending" [ref=f18e566]
+                    - row [ref=f18e567]:
+                      - cell "8" [ref=f18e568]
+                      - cell "Browser Automation" [ref=f18e569]
+                      - cell "— pending" [ref=f18e570]
+                    - row [ref=f18e571]:
+                      - cell "9" [ref=f18e572]
+                      - cell "Phone Reach + Ship" [ref=f18e573]
+                      - cell "— pending" [ref=f18e574]
+                - paragraph [ref=f18e575]:
+                  - text: Planning + verification artifacts live in
+                  - code [ref=f18e576]: .planning/
+                  - text: . Headed-Electron smoke coverage is partial — see
+                  - code [ref=f18e577]: .planning/phases/*/0?-UAT.md
+                  - text: for what's verified vs what still needs a desktop-session run.
+                - separator [ref=f18e578]
+                - generic [ref=f18e579]:
+                  - heading "Features" [level=2] [ref=f18e580]
+                  - 'link "Permalink: Features" [ref=f18e581] [cursor=pointer]':
+                    - /url: "#features"
+                - list [ref=f18e584]:
+                  - listitem [ref=f18e585]:
+                    - strong [ref=f18e586]: Multi-bot runtime
+                    - text: — each bot has its own persona, workspace, tool allowlist, and per-bot per-session conversation history (JSONL)
+                  - listitem [ref=f18e587]:
+                    - strong [ref=f18e588]: Persistent memory
+                    - text: — per-bot markdown memory + JSON facts file, surfaced in the system prompt (with token-budget auto-summarization)
+                  - listitem [ref=f18e589]:
+                    - strong [ref=f18e590]: Built-in tools
+                    - text: —
+                    - code [ref=f18e591]: read_file
+                    - text: ","
+                    - code [ref=f18e592]: write_file
+                    - text: ","
+                    - code [ref=f18e593]: edit_file
+                    - text: ","
+                    - code [ref=f18e594]: list_dir
+                    - text: ","
+                    - code [ref=f18e595]: code_search
+                    - text: (ripgrep),
+                    - code [ref=f18e596]: exec_command
+                    - text: (approval-gated), browser automation (Playwright)
+                  - listitem [ref=f18e597]:
+                    - strong [ref=f18e598]: Streaming chat
+                    - text: — token-by-token streaming from a local LLM endpoint with full tool_use agentic loop
+                  - listitem [ref=f18e599]:
+                    - strong [ref=f18e600]: OS-keychain key storage
+                    - text: — API key encrypted via Electron
+                    - code [ref=f18e601]: safeStorage
+                    - text: (DPAPI on Windows), never sent to the renderer
+                  - listitem [ref=f18e602]:
+                    - strong [ref=f18e603]: Per-session history + summarization
+                    - text: — soft-cap tokens, auto-summarize when approaching limit, summary persists as the JSONL head
+                  - listitem [ref=f18e604]:
+                    - strong [ref=f18e605]: Audit log
+                    - text: — every tool call logged as JSONL under
+                    - code [ref=f18e606]: audit/<UTC-day>.jsonl
+                    - text: (timestamp, bot, tool, params, outcome)
+                - generic [ref=f18e607]:
+                  - heading "Planned" [level=3] [ref=f18e608]
+                  - 'link "Permalink: Planned" [ref=f18e609] [cursor=pointer]':
+                    - /url: "#planned"
+                - list [ref=f18e612]:
+                  - listitem [ref=f18e613]:
+                    - strong [ref=f18e614]: Obsidian vault integration
+                    - text: — read anywhere, write only to
+                    - code [ref=f18e615]: Agents/<bot-name>/
+                  - listitem [ref=f18e616]:
+                    - strong [ref=f18e617]: Phone reach
+                    - text: — HTTP/WS control endpoint reachable from a phone browser over Tailscale
+                  - listitem [ref=f18e618]:
+                    - strong [ref=f18e619]: Cron scheduler + system notifications
+                    - text: for scheduled bot runs
+                  - listitem [ref=f18e620]:
+                    - strong [ref=f18e621]: Single .exe Windows installer
+                    - text: via electron-builder
+                - separator [ref=f18e622]
+                - generic [ref=f18e623]:
+                  - heading "Architecture" [level=2] [ref=f18e624]
+                  - 'link "Permalink: Architecture" [ref=f18e625] [cursor=pointer]':
+                    - /url: "#architecture"
+                - generic [ref=f18e628]:
+                  - code [ref=f18e630]: ┌─────────────────────────────────────────────────────────────┐ │ Electron main process (src/main/) │ │ ├─ IPC handlers (history.list, memory.read, tree.list) │ │ ├─ Anthropic SDK → M3 /v1/messages streaming │ │ └─ spawn() → tool daemon │ │ └─ stdio JSON-RPC │ │ └─ daemon/ │ │ read_file / write_file / edit_file / │ │ list_dir / code_search / ripgrep / │ │ memory.* / tree.list │ └──────────────────┬──────────────────────────────────────────┘ │ contextBridge.exposeInMainWorld ▼ ┌─────────────────────────────────────────────────────────────┐ │ Renderer (src/renderer/, React 19) │ │ ├─ Chat stream (assistant bubbles + tool_use blocks) │ │ ├─ MemoryPill · WorkspaceTree · DiffView · SessionSwitcher│ │ └─ KeyModal (API key + probe + save) │ └─────────────────────────────────────────────────────────────┘
+                  - button "Copy code to clipboard" [ref=f18e632] [cursor=pointer]
+                - paragraph [ref=f18e636]:
+                  - strong [ref=f18e637]: "Security model:"
+                  - text: the renderer never has Node access or the API key. All tool calls go main → daemon → main → renderer over the IPC bridge. Per-bot tool allowlists are enforced in the daemon, not in the agent prompt. Every tool call is audited.
+                - separator [ref=f18e638]
+                - generic [ref=f18e639]:
+                  - heading "Tech Stack" [level=2] [ref=f18e640]
+                  - 'link "Permalink: Tech Stack" [ref=f18e641] [cursor=pointer]':
+                    - /url: "#tech-stack"
+                - list [ref=f18e644]:
+                  - listitem [ref=f18e645]:
+                    - strong [ref=f18e646]: Electron
+                    - text: 33 +
+                    - strong [ref=f18e647]: React
+                    - text: 19 +
+                    - strong [ref=f18e648]: TypeScript
+                    - text: 5.7 +
+                    - strong [ref=f18e649]: Node
+                    - text: 20+
+                  - listitem [ref=f18e650]:
+                    - strong [ref=f18e651]: "@anthropic-ai/sdk"
+                    - text: for streaming + tool_use (no raw HTTP)
+                  - listitem [ref=f18e652]:
+                    - strong [ref=f18e653]: chokidar
+                    - text: for workspace watcher,
+                    - strong [ref=f18e654]: react-arborist
+                    - text: +
+                    - strong [ref=f18e655]: react-diff-viewer-continued
+                    - text: for the tree/diff surfaces
+                  - listitem [ref=f18e656]:
+                    - strong [ref=f18e657]: Vitest
+                    - text: for unit tests,
+                    - strong [ref=f18e658]: Playwright
+                    - text: for Electron smokes
+                  - listitem [ref=f18e659]:
+                    - strong [ref=f18e660]: Pre-built binaries only
+                    - text: — no native modules requiring node-gyp
+                - paragraph [ref=f18e661]:
+                  - text: LLM endpoint is MiniMax M3 (Anthropic-compatible
+                  - code [ref=f18e662]: /v1/messages
+                  - text: ); only network dependency. No telemetry, no Sentry, no Statsig.
+                - separator [ref=f18e663]
+                - generic [ref=f18e664]:
+                  - heading "Getting started" [level=2] [ref=f18e665]
+                  - 'link "Permalink: Getting started" [ref=f18e666] [cursor=pointer]':
+                    - /url: "#getting-started"
+                - generic [ref=f18e669]:
+                  - generic [ref=f18e670]:
+                    - generic [ref=f18e671]: "# requires Node 20+"
+                    - text: nvm use
+                    - generic [ref=f18e672]: "# uses .nvmrc"
+                    - text: npm install npm run build
+                    - generic [ref=f18e673]: "# compiles main (tsc) + renderer (vite)"
+                    - text: npm start
+                    - generic [ref=f18e674]: "# launches the built Electron app"
+                  - button "Copy code to clipboard" [ref=f18e676] [cursor=pointer]
+                - generic [ref=f18e680]:
+                  - heading "Dev mode" [level=3] [ref=f18e681]
+                  - 'link "Permalink: Dev mode" [ref=f18e682] [cursor=pointer]':
+                    - /url: "#dev-mode"
+                - generic [ref=f18e685]:
+                  - generic [ref=f18e686]:
+                    - text: npm run dev
+                    - generic [ref=f18e687]: "# vite + electron concurrently, hot-reload renderer"
+                  - button "Copy code to clipboard" [ref=f18e689] [cursor=pointer]
+                - generic [ref=f18e693]:
+                  - heading "Tests" [level=3] [ref=f18e694]
+                  - 'link "Permalink: Tests" [ref=f18e695] [cursor=pointer]':
+                    - /url: "#tests"
+                - generic [ref=f18e698]:
+                  - generic [ref=f18e699]:
+                    - text: npm test
+                    - generic [ref=f18e700]: "# Vitest unit suite"
+                    - text: npm run test:smoke
+                    - generic [ref=f18e701]: "# Playwright Electron + daemon smokes"
+                    - text: LOCALBOT_SMOKE_OK=1 npm run test:smoke
+                    - generic [ref=f18e702]: "# headed Electron (needs a display)"
+                  - button "Copy code to clipboard" [ref=f18e704] [cursor=pointer]
+                - separator [ref=f18e708]
+                - generic [ref=f18e709]:
+                  - heading "Configuration" [level=2] [ref=f18e710]
+                  - 'link "Permalink: Configuration" [ref=f18e711] [cursor=pointer]':
+                    - /url: "#configuration"
+                - list [ref=f18e714]:
+                  - listitem [ref=f18e715]:
+                    - code [ref=f18e716]: M3_API_BASE
+                    - text: — LLM endpoint (default
+                    - code [ref=f18e717]: http://localhost:8080
+                    - text: )
+                  - listitem [ref=f18e718]:
+                    - code [ref=f18e719]: M3_MODEL
+                    - text: — model name (default
+                    - code [ref=f18e720]: MiniMax/M3
+                    - text: )
+                  - listitem [ref=f18e721]:
+                    - code [ref=f18e722]: LOCALBOT_USER_DATA_DIR
+                    - text: — override userData root (used by tests)
+                  - listitem [ref=f18e723]:
+                    - code [ref=f18e724]: LOCALBOT_WORKSPACE_ROOT
+                    - text: — workspace path bots read/write
+                  - listitem [ref=f18e725]:
+                    - code [ref=f18e726]: LOCALBOT_SOFT_CAP_TOKENS
+                    - text: — context-budget threshold for auto-summarize (default
+                    - code [ref=f18e727]: "60000"
+                    - text: )
+                  - listitem [ref=f18e728]:
+                    - code [ref=f18e729]: ELECTRON_RUN_AS_NODE=1
+                    - text: — required in the daemon child process env (set by main)
+                - separator [ref=f18e730]
+                - generic [ref=f18e731]:
+                  - heading "Repo layout" [level=2] [ref=f18e732]
+                  - 'link "Permalink: Repo layout" [ref=f18e733] [cursor=pointer]':
+                    - /url: "#repo-layout"
+                - generic [ref=f18e736]:
+                  - code [ref=f18e738]: ".claude/ # Claude agent config + project skills .planning/ # roadmap, requirements, phase plans, debug sessions, UAT daemon/ # tool daemon (CJS, stdio JSON-RPC) research/ # ARCHITECTURE.md (Grokbot reference architecture notes) resources/ # icons, assets src/ main/ # Electron main: IPC, LLM loop, keychain, daemon spawn renderer/ # React 19 UI preload/ # contextBridge surface tests/ unit/ # Vitest playwright/ # Electron + daemon smoke tests"
+                  - button "Copy code to clipboard" [ref=f18e740] [cursor=pointer]
+                - separator [ref=f18e744]
+                - generic [ref=f18e745]:
+                  - heading "License" [level=2] [ref=f18e746]
+                  - 'link "Permalink: License" [ref=f18e747] [cursor=pointer]':
+                    - /url: "#license"
+                - paragraph [ref=f18e750]: Personal/internal. Not published for redistribution.
+        - generic [ref=f18e753]:
+          - generic [ref=f18e754]:
+            - heading "About Edit repository metadata" [level=2] [ref=f18e755]:
+              - generic [ref=f18e757]:
+                - generic [ref=f18e758]: About
+                - button "Edit repository metadata" [ref=f18e759] [cursor=pointer]
+            - paragraph [ref=f18e762]: Mulit Agent workflow
+            - heading "Resources" [level=3] [ref=f18e763]
+            - link "Readme" [ref=f18e765] [cursor=pointer]:
+              - /url: "#readme-ov-file"
+            - link "Activity" [ref=f18e769] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/activity
+            - heading "Stars" [level=3] [ref=f18e772]
+            - link [ref=f18e774] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/stargazers
+              - strong [ref=f18e778]: "0"
+              - text: stars
+            - heading "Watchers" [level=3] [ref=f18e779]
+            - link [ref=f18e781] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/watchers
+              - strong [ref=f18e785]: "0"
+              - text: watching
+            - heading "Forks" [level=3] [ref=f18e786]
+            - link [ref=f18e788] [cursor=pointer]:
+              - /url: /simthesexist/LocalBot/forks
+              - strong [ref=f18e792]: "0"
+              - text: forks
+          - heading "Releases" [level=2] [ref=f18e794]
+          - heading "Packages" [level=2] [ref=f18e798]
+          - heading "Contributors" [level=2] [ref=f18e801]
+          - heading "Languages" [level=2] [ref=f18e804]
+  - contentinfo [ref=f18e807]:
+    - heading "Footer" [level=2] [ref=f18e808]
+    - generic [ref=f18e809]:
+      - generic [ref=f18e810]:
+        - link "GitHub Homepage" [ref=f18e811] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=f18e814]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=f18e815]:
+        - heading "Footer navigation" [level=3] [ref=f18e816]
+        - list "Footer navigation" [ref=f18e817]:
+          - listitem [ref=f18e818]:
+            - link "Terms" [ref=f18e819] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=f18e820]:
+            - link "Privacy" [ref=f18e821] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=f18e822]:
+            - link "Security" [ref=f18e823] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=f18e824]:
+            - link "Status" [ref=f18e825] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=f18e826]:
+            - link "Community" [ref=f18e827] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=f18e828]:
+            - link "Docs" [ref=f18e829] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=f18e830]:
+            - link "Contact" [ref=f18e831] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=f18e832]:
+            - button "Manage cookies" [ref=f18e834] [cursor=pointer]
+          - listitem [ref=f18e835]:
+            - button "Do not share my personal information" [ref=f18e837] [cursor=pointer]
