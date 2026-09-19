@@ -26,8 +26,10 @@ export default defineConfig({
   },
   projects: [
     // Phase 4 Wave 3: daemon-only smoke that runs without a display. The
-    // bot-crud + multi-bot tests can opt in to this project so CI can
-    // prove the architecture without an Electron window.
+    // bot-crud + multi-bot + scheduler-notification tests opt in to this
+    // project so CI can prove the architecture without an Electron window.
+    // Phase 6 Wave 3 added scheduler-notification.test.ts covering
+    // cron happy / error / disabled / delete paths end-to-end.
     {
       name: 'daemon-smoke',
       testMatch: /.*\.test\.ts/,
