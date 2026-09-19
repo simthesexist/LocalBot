@@ -292,3 +292,155 @@ describe('loader.ALLOWED_CONFIG_KEYS (schema surface)', () => {
     expect(loader.ALLOWED_CONFIG_KEYS.has('scheduledPrompt')).toBe(true);
   });
 });
+
+// Phase 6: cron expression, notifyOnError type, scheduledPrompt cap
+// extension of validateConfig + writeConfigPatch. AGENT-09 + T-P6-02 +
+// T-P6-05 — invalid expressions reject before any disk write.
+describe('Phase 6 — cron + notifyOnError + scheduledPrompt validation', () => {
+  it('validateConfig rejects notifyOnError:0 (number, not boolean) with code:invalid_config', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-1', name: 'P6-1', schemaVersion: 1, allowlist: [], notifyOnError: 0,
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_config' }));
+  });
+
+  it('validateConfig rejects notifyOnError:"true" (string) with code:invalid_config', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-2', name: 'P6-2', schemaVersion: 1, allowlist: [], notifyOnError: 'true',
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_config' }));
+  });
+
+  it('validateConfig accepts notifyOnError:true (boolean)', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-3', name: 'P6-3', schemaVersion: 1, allowlist: [], notifyOnError: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('validateConfig accepts scheduledPrompt with a string under 4096 chars', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-4', name: 'P6-4', schemaVersion: 1, allowlist: [], scheduledPrompt: 'check stuff',
+      }),
+    ).not.toThrow();
+  });
+
+  it('validateConfig rejects scheduledPrompt with > 4096 chars', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-5', name: 'P6-5', schemaVersion: 1, allowlist: [], scheduledPrompt: 'a'.repeat(5000),
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_config' }));
+  });
+
+  it('validateConfig accepts a 5-field cron expression "0 9 * * *"', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-6', name: 'P6-6', schemaVersion: 1, allowlist: [], cron: '0 9 * * *',
+      }),
+    ).not.toThrow();
+  });
+
+  it('validateConfig accepts a 6-field cron expression with seconds "0 0 9 * * *"', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-7', name: 'P6-7', schemaVersion: 1, allowlist: [], cron: '0 0 9 * * *',
+      }),
+    ).not.toThrow();
+  });
+
+  it('validateConfig rejects "not a cron" with code:invalid_cron', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-8', name: 'P6-8', schemaVersion: 1, allowlist: [], cron: 'not a cron',
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_cron' }));
+  });
+
+  it('validateConfig rejects a 4-field cron expression with code:invalid_cron', () => {
+    expect(() =>
+      loader.__test__.validateConfig({
+        id: 'p6-9', name: 'P6-9', schemaVersion: 1, allowlist: [], cron: '*/5 * * *',
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid_cron' }));
+  });
+});
+
+describe('Phase 6 — writeConfigPatch cron + scheduled fields', () => {
+  it('writeConfigPatch with cron:"bad" rejects code:invalid_cron; on-disk config.json unchanged', () => {
+    const dir = mkTmp();
+    try {
+      const original = loader.writeConfig(dir, 'patch-bad', {
+        id: 'patch-bad', name: 'Patch Bad', schemaVersion: 1, allowlist: [],
+      });
+      const cfgPath = path.join(dir, 'bots', 'patch-bad', 'config.json');
+      const originalText = fs.readFileSync(cfgPath, 'utf8');
+      expect(() =>
+        loader.writeConfigPatch(dir, 'patch-bad', { cron: 'bad' }),
+      ).toThrowError(expect.objectContaining({ code: 'invalid_cron' }));
+      const afterText = fs.readFileSync(cfgPath, 'utf8');
+      expect(afterText).toBe(originalText);
+      const reread = loader.readConfig(dir, 'patch-bad');
+      expect(reread?.cron).toBe(original.cron);
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('writeConfigPatch with notifyOnError:false succeeds; the value is persisted', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'patch-noe', {
+        id: 'patch-noe', name: 'NOE', schemaVersion: 1, allowlist: [],
+      });
+      const patched = loader.writeConfigPatch(dir, 'patch-noe', { notifyOnError: false });
+      expect(patched.notifyOnError).toBe(false);
+      const reread = loader.readConfig(dir, 'patch-noe');
+      expect(reread?.notifyOnError).toBe(false);
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('writeConfigPatch with {foo:"bar"} still rejects code:invalid_config (unknown key)', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'patch-uk', {
+        id: 'patch-uk', name: 'UK', schemaVersion: 1, allowlist: [],
+      });
+      expect(() =>
+        loader.writeConfigPatch(dir, 'patch-uk', { foo: 'bar' } as unknown as Record<string, unknown>),
+      ).toThrowError(expect.objectContaining({ code: 'invalid_config' }));
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it('writeConfigPatch with scheduledPrompt + cron writes both fields to disk', () => {
+    const dir = mkTmp();
+    try {
+      loader.writeConfig(dir, 'patch-sp', {
+        id: 'patch-sp', name: 'SP', schemaVersion: 1, allowlist: [],
+      });
+      const patched = loader.writeConfigPatch(dir, 'patch-sp', {
+        cron: '*/10 * * * *',
+        cronEnabled: true,
+        scheduledPrompt: 'say hi',
+        notifyOnError: true,
+      });
+      expect(patched.cron).toBe('*/10 * * * *');
+      expect(patched.cronEnabled).toBe(true);
+      expect(patched.scheduledPrompt).toBe('say hi');
+      expect(patched.notifyOnError).toBe(true);
+      const reread = loader.readConfig(dir, 'patch-sp');
+      expect(reread?.cron).toBe('*/10 * * * *');
+      expect(reread?.scheduledPrompt).toBe('say hi');
+    } finally {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+});
