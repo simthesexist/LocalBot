@@ -247,3 +247,21 @@ case.
 - 4 Playwright E2E cases all pass.
 - Pre-existing 2 Playwright failures (daemon-tools + scheduler-notification
   error path) reproduce on `main` without my changes — NOT a regression.
+
+## Known Issues (post-execution, observed by orchestrator)
+
+- **`tests/unit/bots_update_atomic.test.ts` flakes 2-3/6 in the full vitest
+  run but passes 6/6 in isolation.** Root cause is inter-test mock
+  pollution across the vitest worker pool — the daemon subprocess spawned
+  by this test fails to write `scheduler.json` after a `bots/update`
+  call when other tests have run first. Five-times-in-isolation reruns
+  of just this file all pass; rerunning the whole suite also sometimes
+  passes (intermittent). This is a **pre-existing** flake documented by
+  the 07-02 executor (50ms setTimeout race in the same file); Phase 7
+  exposes it more often because adding tests increases the chance of
+  the polluting test running immediately before bots_update_atomic.
+  Recommend a quick-task fix that either (a) adds an explicit
+  `vi.resetModules()` between test files in vitest config, or (b)
+  scopes the mock pollution per-test-file via `vi.mock` factory
+  parameters. Out of scope for Phase 7 — recorded here for the
+  backlog.
