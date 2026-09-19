@@ -41,6 +41,16 @@ const TOOLS = [
   // DEFAULT_POLICY.allowlist — per-bot opt-in via BotSettingsBrowserTab
   // (per RESEARCH §Architectural Responsibility Map).
   'browser.navigate',
+  // Phase 8 Plan 2: the 5 remaining browser tools — all share the same
+  // URL allowlist + SSRF shield as browser.navigate. Each runs
+  // checkBrowserUrl on `page.url()` BEFORE any Playwright action
+  // (Pitfall: page state may have changed). NOT in DEFAULT_POLICY —
+  // per-bot opt-in.
+  'browser.click',
+  'browser.type',
+  'browser.screenshot',
+  'browser.evaluate',
+  'browser.fill_form',
 ];
 
 // Tools that bypass the per-bot allowlist when called from main. The
@@ -264,6 +274,120 @@ const SCHEMAS = {
         },
       },
       required: ['url'],
+    },
+  },
+  // Phase 8 Plan 2: browser.click — click a CSS selector on the CURRENT
+  // page. The URL allowlist check runs against `page.url()` (page state
+  // may have changed since the last navigate). 10s page.click timeout;
+  // Playwright timeout surfaces as {code:'selector_not_found'}.
+  'browser.click': {
+    name: 'browser.click',
+    description: 'Click a DOM element by CSS selector on the current page. Subject to URL allowlist + SSRF shield.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the element to click.',
+        },
+      },
+      required: ['selector'],
+    },
+  },
+  // Phase 8 Plan 2: browser.type — fill an input by CSS selector via
+  // page.locator(selector).fill(text). Optional `submit:true` presses
+  // Enter after fill. Audit NEVER includes the typed text (Pitfall 5).
+  'browser.type': {
+    name: 'browser.type',
+    description: 'Fill an input element by CSS selector. Subject to URL allowlist. Audit carries textBytes only, never the typed text.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        selector: {
+          type: 'string',
+          description: 'CSS selector for the input element.',
+        },
+        text: {
+          type: 'string',
+          description: 'Text to fill into the input.',
+        },
+        submit: {
+          type: 'boolean',
+          description: 'If true, press Enter after filling (default false).',
+        },
+      },
+      required: ['selector', 'text'],
+    },
+  },
+  // Phase 8 Plan 2: browser.screenshot — capture a PNG of the current
+  // viewport (or full page when fullPage:true). Writes atomically to
+  // <userData>/screenshots/<runId>/<n>.png. 50 PNGs per runId + 500MB
+  // total disk quota (Pitfall 6). `n` must match /^[a-zA-Z0-9._-]{1,32}$/.
+  'browser.screenshot': {
+    name: 'browser.screenshot',
+    description: 'Capture a PNG of the current viewport. Subject to URL allowlist + 50/runId + 500MB total disk quota.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        n: {
+          type: 'string',
+          description: 'Filename slug (default: timestamp base36). Must match /^[a-zA-Z0-9._-]{1,32}$/.',
+        },
+        fullPage: {
+          type: 'boolean',
+          description: 'Capture the full scrollable page instead of the viewport (default false).',
+        },
+      },
+    },
+  },
+  // Phase 8 Plan 2: browser.evaluate — execute JavaScript in the page
+  // context. 10s timeout + 50KB result cap. Audit NEVER includes the
+  // expression source or the result value (Pitfall 5).
+  'browser.evaluate': {
+    name: 'browser.evaluate',
+    description: 'Execute JavaScript in the page context. 10s timeout + 50KB result cap. Subject to URL allowlist. Audit carries expressionBytes only.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        expression: {
+          type: 'string',
+          description: 'JavaScript expression to evaluate. Up to 100KB.',
+        },
+      },
+      required: ['expression'],
+    },
+  },
+  // Phase 8 Plan 2: browser.fill_form — fill multiple form fields in a
+  // single tool call. Promise.all parallel fills (NOT sequential).
+  // Optional `submit: {selector}` clicks a final button after all fills
+  // complete. Up to 20 fields per call. Audit NEVER includes field values.
+  'browser.fill_form': {
+    name: 'browser.fill_form',
+    description: 'Fill multiple form fields in a single call (parallel). Subject to URL allowlist. Up to 20 fields per call.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              selector: { type: 'string' },
+              value: { type: 'string' },
+            },
+            required: ['selector', 'value'],
+          },
+          description: 'Array of {selector, value} pairs to fill in parallel.',
+        },
+        submit: {
+          type: 'object',
+          properties: {
+            selector: { type: 'string' },
+          },
+          description: 'Optional button selector to click after all fills complete.',
+        },
+      },
+      required: ['fields'],
     },
   },
 };

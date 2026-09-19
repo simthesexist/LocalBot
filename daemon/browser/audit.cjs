@@ -41,6 +41,12 @@ function browserAuditParams(name, args, successResult) {
     fieldCount: undefined,
   };
 
+  // Plan 1 (browser.navigate): args.url carries the URL.
+  // Plan 2 (click/type/fill_form/screenshot/evaluate): args has no URL —
+  // the URL is in successResult.{hostname, path} because the tool
+  // parses `page.url()` after the Playwright action. Fall back to
+  // successResult when args.url is absent so the audit row still has
+  // hostname/path for the Plan 2 tools.
   let parsed = null;
   const candidate = (args && typeof args.url === 'string') ? args.url : '';
   if (candidate) {
@@ -49,6 +55,9 @@ function browserAuditParams(name, args, successResult) {
   if (parsed) {
     out.hostname = parsed.hostname || '';
     out.path = parsed.pathname || '';
+  } else if (successResult && typeof successResult === 'object') {
+    if (typeof successResult.hostname === 'string') out.hostname = successResult.hostname;
+    if (typeof successResult.path === 'string') out.path = successResult.path;
   }
 
   if (successResult && typeof successResult === 'object') {

@@ -300,6 +300,42 @@ function resolveBrowserConfigForBot(botId, ctx) {
   };
 }
 
+// Phase 8 Plan 2: walk <screenshotDir> recursively and sum the bytes of
+// every regular file. Returns 0 on ENOENT (first screenshot call). Used by
+// the screenshot quota check at tools/call entry (Pitfall 6, T-8-11).
+//
+// Note: Node 20.1+ supports `fs.promises.readdir(dir, {recursive:true})`
+// which is the simplest implementation; for older versions this would
+// need a custom walker. The package.json pins Node 20.11+ so the
+// recursive option is available.
+async function sumScreenshotBytes(dir) {
+  if (typeof dir !== 'string' || dir.length === 0) return 0;
+  let total = 0;
+  let entries;
+  try {
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return 0;
+    throw e;
+  }
+  for (const ent of entries) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) {
+      total += await sumScreenshotBytes(full);
+      continue;
+    }
+    if (ent.isFile()) {
+      try {
+        const st = await fs.promises.stat(full);
+        total += st.size;
+      } catch {
+        /* race: file removed between readdir + stat — ignore */
+      }
+    }
+  }
+  return total;
+}
+
 // Phase 8 Plan 1: audit minimization for browser.* tools. NEVER include
 // the full URL or query string (Pitfall 5); NEVER include rendered HTML
 // or typed text; NEVER include screenshot bytes. The audit row carries
@@ -495,6 +531,19 @@ rl.on('line', async (line) => {
             const m = denylist.matchesDangerous(args && typeof args.command === 'string' ? args.command : '');
             if (m && m.hit) {
               throw Object.assign(new Error('denylist_blocked'), { code: 'denylist_blocked' });
+            }
+          }
+          // Phase 8 Plan 2: total screenshot disk quota (Pitfall 6, T-8-11).
+          // 500MB across <userData>/screenshots/. Per-runId cap (50) is
+          // enforced inside browser_screenshot.cjs (it owns the runId dir
+          // lookup). Refused with {code:'screenshot_quota_exceeded'} BEFORE
+          // any browser.screenshot call so a runaway bot can't fill the
+          // disk.
+          if (name === 'browser.screenshot' && userDataDirState) {
+            const total = await sumScreenshotBytes(path.join(userDataDirState, 'screenshots'));
+            if (total > browser.MAX_TOTAL_BYTES) {
+              throw Object.assign(new Error('total screenshot disk quota exceeded'),
+                { code: 'screenshot_quota_exceeded', totalBytes: total });
             }
           }
           // Phase 2 Wave 3: build a per-call AbortController so `tools/cancel`
