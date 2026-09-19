@@ -36,12 +36,12 @@
     {
       "number": "7",
       "name": "Obsidian Integration",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "8",
       "name": "Browser Automation",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "9",
@@ -54,5 +54,5 @@
     "label": "Show progress",
     "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-09-19T12:59:31.966Z"
+  "updated_at": "2026-09-19T20:14:29.334Z"
 }

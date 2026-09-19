@@ -9,7 +9,7 @@
 - [x] **Phase 5: Shell Exec with Approval** - exec_command tool with approval modal + global dangerous-command denylist
 - [x] **Phase 6: Scheduler + Notifications** - Cron-driven bot runs + system notifications on scheduled-bot error
 - [x] **Phase 7: Obsidian Integration** - Hybrid vault access (read-anywhere, write-agents-only) with glob enforcement + vault search
-- [ ] **Phase 8: Browser Automation** - Playwright-driven browser tools (navigate, click, type, fill, screenshot, evaluate)
+- [x] **Phase 8: Browser Automation** - Playwright-driven browser tools (navigate, click, type, fill, screenshot, evaluate)
 - [ ] **Phase 9: Phone Reach + Ship** - Tailscale-friendly HTTP/WS control endpoint + Windows .exe packaging with manual update
 
 ## Phase Details
