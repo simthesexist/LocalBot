@@ -121,18 +121,21 @@ export function BotSettingsPage({ bot, onClose, onUpdated }: BotSettingsPageProp
     void (async () => {
       try {
         const mod = await import('croner');
-        const Cron = (mod as { default?: unknown }).default ?? mod;
-        // croner exposes Cron with a static .next() helper OR you can
-        // instantiate `new Cron(expr)`. We use the instance API to also
-        // catch the constructor's sync CronExpressionError.
-        const CronCtor = Cron as unknown as new (
+        // croner@9 exports the Cron constructor as a named export; some
+        // bundlers surface it via .default too. Prefer named, fall back.
+        const modAny = mod as unknown as { Cron?: unknown; default?: { Cron?: unknown } };
+        const Cron = modAny.Cron ?? modAny.default?.Cron;
+        if (typeof Cron !== 'function') {
+          throw new Error('croner export shape changed');
+        }
+        const CronCtor = Cron as new (
           expr: string,
           opts?: Record<string, unknown>,
-        ) => { next(): Date | null };
+        ) => { nextRuns(count: number): Array<Date | null>; nextRun(after?: Date): Date | null };
         const instance = new CronCtor(trimmed, { protect: true });
+        const dates = instance.nextRuns(5);
         const fires: string[] = [];
-        for (let i = 0; i < 5; i++) {
-          const d = instance.next();
+        for (const d of dates) {
           if (!d) break;
           fires.push(d.toISOString());
         }
