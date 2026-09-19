@@ -57,6 +57,29 @@ export interface ShellRequestApprovalEvent {
 }
 
 /**
+ * Phase 6 Wave 2: emitted by the daemon croner tick when a scheduled run
+ * errors AND the bot's `notifyOnError !== false`. Main forwards the event
+ * to the renderer (which displays nothing directly) AND constructs an
+ * Electron `Notification` toast. Body is sliced to 120 chars at the
+ * notification constructor site to minimize disclosure in the toast.
+ */
+export interface ScheduledErrorEvent {
+  bot: string;
+  runId: string;
+  errorMessage: string;
+  ts: string;
+}
+
+/**
+ * Phase 6 Wave 2: emitted by main when the user clicks the
+ * scheduled-error toast. The renderer subscribes and calls
+ * `setActiveBotId(botId)` so the chat pane switches to the errored bot.
+ */
+export interface NavigateToBotEvent {
+  botId: string;
+}
+
+/**
  * Phase 3: head-of-file summary record. Persisted as the first JSONL row of
  * a session when the token soft-cap triggers summarization.
  */

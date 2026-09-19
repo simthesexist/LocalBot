@@ -31,6 +31,8 @@ import type {
   KeySetResult,
   MemoryReadResult,
   MemoryUpdatedEvent,
+  NavigateToBotEvent,
+  ScheduledErrorEvent,
   SessionEntry,
   ShellExitEvent,
   ShellRequestApprovalEvent,
@@ -72,7 +74,10 @@ export type LocalbotChannel =
   | 'shells:respond'
   | 'shell:request-approval'
   | 'shell:token'
-  | 'shell:exit';
+  | 'shell:exit'
+  // Phase 6 Wave 2:
+  | 'notification:scheduled-error'
+  | 'event:navigate-to-bot';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -91,7 +96,10 @@ export type LocalbotEventPayload =
   // Phase 5 Wave 2:
   | ShellRequestApprovalEvent
   | ShellTokenEvent
-  | ShellExitEvent;
+  | ShellExitEvent
+  // Phase 6 Wave 2:
+  | ScheduledErrorEvent
+  | NavigateToBotEvent;
 
 export interface LocalbotApi {
   sendMessage: (content: string, msgId: string, bot?: string) => Promise<{ ok: boolean; error?: string }>;
