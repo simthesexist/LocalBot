@@ -1,11 +1,15 @@
-// Phase 9 Plan 1+2: network IPC bridge.
+// Phase 9 Plan 1+2+3: network IPC bridge.
 //
 // Wires NETWORK_GET_CONFIG + NETWORK_SET_CONFIG + NETWORK_GET_REACH_INFO
+// + NETWORK_CHECK_FOR_UPDATE + NETWORK_DOWNLOAD_UPDATE + NETWORK_INSTALL_UPDATE
 // invoke channels to:
 //   - the daemon's matching JSON-RPC methods (network/get_config +
 //     network/set_config), via `callBot` in src/main/daemon/spawn.ts
 //   - the Wave 2 Tailscale detector (tailscale.detectReach) for
 //     NETWORK_GET_REACH_INFO
+//   - the Wave 3 electron-updater manual flow (updater.checkNow /
+//     downloadNow / installNow) for the three update channels; status
+//     changes broadcast via EVENT_UPDATE_STATUS_CHANGED from main/index.ts.
 //
 // Validation mirrors the daemon's network/set_config shape check: port
 // integer [1,65535], bindMode ∈ {localhost,lan},
@@ -29,6 +33,11 @@ import { callBot } from '../daemon/spawn';
 import { appendAuditLine } from '../audit/logger';
 import { detectReach } from '../network/tailscale';
 import { rebindNetworkServer, phoneBundleDir } from '../network';
+import {
+  checkNow,
+  downloadNow,
+  installNow,
+} from '../network/updater';
 import type {
   NetworkConfig,
   NetworkConfigResult,
@@ -177,6 +186,37 @@ export function registerNetworkHandlers(): void {
       return info;
     } catch (err) {
       return { tailscale: false, lanIps: [], error: (err as Error).message };
+    }
+  });
+
+  // Phase 9 Plan 3: electron-updater manual check/drain/install channels.
+  // Status changes broadcast via EVENT_UPDATE_STATUS_CHANGED from main/index.ts
+  // (initUpdater's onChange callback); these handlers just proxy to
+  // electron-updater and return ok to the renderer.
+  ipcMain.handle(CHANNELS.NETWORK_CHECK_FOR_UPDATE, async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await checkNow();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(CHANNELS.NETWORK_DOWNLOAD_UPDATE, async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await downloadNow();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(CHANNELS.NETWORK_INSTALL_UPDATE, async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      installNow();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
     }
   });
 }

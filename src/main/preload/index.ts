@@ -45,6 +45,8 @@ const EVENT_CHANNELS = new Set<string>([
   // module and refreshes on each event.
   CHANNELS.EVENT_NETWORK_CONFIG_UPDATED,
   CHANNELS.EVENT_REACH_INFO_UPDATED,
+  // Phase 9 Plan 3: electron-updater status broadcast.
+  CHANNELS.EVENT_UPDATE_STATUS_CHANGED,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {
@@ -130,6 +132,10 @@ const api: LocalbotApi = {
     setConfig: (cfg: NetworkConfig) =>
       ipcRenderer.invoke(CHANNELS.NETWORK_SET_CONFIG, cfg),
     getReachInfo: () => ipcRenderer.invoke(CHANNELS.NETWORK_GET_REACH_INFO),
+    // Phase 9 Plan 3: electron-updater manual flow.
+    checkForUpdate: () => ipcRenderer.invoke(CHANNELS.NETWORK_CHECK_FOR_UPDATE),
+    downloadUpdate: () => ipcRenderer.invoke(CHANNELS.NETWORK_DOWNLOAD_UPDATE),
+    installUpdate: () => ipcRenderer.invoke(CHANNELS.NETWORK_INSTALL_UPDATE),
   },
   // Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
   // that callers (e.g. Playwright tests, future generic tools, ad-hoc dev

@@ -95,7 +95,9 @@ export type LocalbotChannel =
   | 'browser:page:closed'
   // Phase 9 Plan 2: network config + reach info event broadcasts.
   | 'network:config:updated'
-  | 'network:reach:updated';
+  | 'network:reach:updated'
+  // Phase 9 Plan 3: electron-updater manual flow status broadcast.
+  | 'network:update:status';
 
 export type LocalbotEventPayload =
   | TokenEvent
@@ -198,6 +200,12 @@ export interface LocalbotApi {
     getConfig: () => Promise<NetworkConfigResult>;
     setConfig: (cfg: NetworkConfig) => Promise<NetworkConfigResult>;
     getReachInfo: () => Promise<ReachInfo>;
+    // Phase 9 Plan 3: electron-updater manual flow. Status surfaces via
+    // the 'network:update:status' event broadcast; these invocations just
+    // kick off the corresponding action on autoUpdater.
+    checkForUpdate: () => Promise<{ ok: boolean; error?: string }>;
+    downloadUpdate: () => Promise<{ ok: boolean; error?: string }>;
+    installUpdate: () => Promise<{ ok: boolean; error?: string }>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

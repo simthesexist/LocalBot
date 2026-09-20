@@ -9,6 +9,7 @@ import { ApprovalModalStack } from './components/ApprovalModalStack';
 import { VaultGlobalSettingsModal } from './components/VaultGlobalSettingsModal';
 import { NetworkSettingsModal } from './components/NetworkSettingsModal';
 import { ReachInfoPill } from './components/ReachInfoPill';
+import { UpdateToast } from './components/UpdateToast';
 import { attachShellEventListeners } from './state/shells';
 import { useBots } from './state/bots';
 
@@ -134,6 +135,8 @@ export function App() {
       {showNetworkModal && (
         <NetworkSettingsModal open={showNetworkModal} onClose={closeNetworkModal} />
       )}
+      {/* Phase 9 Plan 3: UpdateToast renders only when update state !== 'idle'. */}
+      <UpdateToast />
     </>
   );
 }

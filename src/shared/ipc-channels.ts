@@ -91,6 +91,15 @@ export const CHANNELS = {
   EVENT_NETWORK_CONFIG_UPDATED: 'network:config:updated',
   EVENT_REACH_INFO_UPDATED: 'network:reach:updated',
 
+  // Phase 9 Plan 3: electron-updater manual flow channels. Renderer invokes
+  // CHECK/DOWNLOAD/INSTALL; main broadcasts EVENT_UPDATE_STATUS_CHANGED on
+  // every autoUpdater event transition (checking / available / downloading
+  // progress / downloaded / error).
+  NETWORK_CHECK_FOR_UPDATE: 'network:check_for_update',
+  NETWORK_DOWNLOAD_UPDATE: 'network:download_update',
+  NETWORK_INSTALL_UPDATE: 'network:install_update',
+  EVENT_UPDATE_STATUS_CHANGED: 'network:update:status',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

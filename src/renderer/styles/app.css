@@ -2022,3 +2022,47 @@ html, body, #root {
   color: var(--color-text-muted, #6b7280);
   cursor: not-allowed;
 }
+
+/* Phase 9 Plan 3: UpdateToast (electron-updater manual flow). */
+.update-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding: 1rem 1.2rem;
+  background: #1a1a1a;
+  color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1500;
+  max-width: 320px;
+  animation: slideIn 0.2s ease-out;
+}
+
+.update-toast button {
+  margin-left: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 0.3rem;
+  background: #007aff;
+  color: white;
+  cursor: pointer;
+}
+
+.update-toast .progress {
+  height: 4px;
+  background: #444;
+  margin-top: 0.5rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.update-toast .progress-bar {
+  height: 100%;
+  background: #007aff;
+  transition: width 0.2s;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

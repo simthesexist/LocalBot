@@ -536,6 +536,11 @@ module.exports = {
   streamVaultReadToolUse,
   streamVaultWriteToolUse,
   streamVaultSearchToolUse,
+  // Phase 9 Plan 3 — phone-reach WS round-trip helper. Binds a small
+  // HTTP server, answers every POST /v1/messages with a synthetic text
+  // SSE stream (no tool_use) so the phone-reach test can prove the full
+  // WS round-trip end-to-end without exercising the LLM tool surface.
+  streamPhoneReachChat,
 };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -1949,6 +1954,123 @@ export async function streamBrowserEvaluateToolUse(
   await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   // eslint-disable-next-line no-console
   console.log(`[fake-m3] streamBrowserEvaluateToolUse listening on 127.0.0.1:${port} for bot=${bot} expressionBytes=${Buffer.byteLength(input.expression, 'utf8')}`);
+  return {
+    url: `http://127.0.0.1:${port}`,
+    async close() {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Phase 9 Plan 3: streamPhoneReachChat
+//
+// Helper used by tests/playwright/phone-reach.test.ts to drive the full
+// Phase 9 vertical slice end-to-end (WS round-trip reusing
+// runAgenticLoop). Binds a small HTTP server on `port`, answers every
+// POST /v1/messages with a synthetic text SSE stream (no tool_use), so
+// the phone-reach test can prove the WS contract without exercising the
+// LLM tool surface.
+// ────────────────────────────────────────────────────────────────────────
+
+export interface StreamPhoneReachChatOpts {
+  bot: string;
+  port: number;
+  abortSignal: AbortSignal;
+  /** Synthetic assistant text. Default "Hello from fake M3". */
+  responseText?: string;
+  /** Per-token delay in ms (default 25). */
+  tokenDelayMs?: number;
+}
+
+export async function streamPhoneReachChat(
+  opts: StreamPhoneReachChatOpts,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const { bot, port, abortSignal, responseText, tokenDelayMs = 25 } = opts;
+  const text = responseText ?? `Hello from fake M3 (phone-reach for bot=${bot})`;
+  const tokens = text.split(/(\s+)/).filter(Boolean);
+
+  const server = http.createServer((req, res) => {
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'content-type, x-api-key, anthropic-version',
+      });
+      res.end();
+      return;
+    }
+    if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'not_found', message: 'fake M3 phone-reach only handles /v1/messages' } }));
+      return;
+    }
+    req.on('data', () => {});
+    req.on('end', () => {
+      res.writeHead(200, SSE_HEADERS);
+      const chunks: string[] = [
+        sseFrame('message_start', {
+          type: 'message_start',
+          message: {
+            id: `msg_fake_phone_${bot}`,
+            type: 'message',
+            role: 'assistant',
+            content: [],
+            model: 'MiniMax/M3',
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 5, output_tokens: 0 },
+          },
+        }),
+        sseFrame('content_block_start', {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'text', text: '' },
+        }),
+      ];
+      let i = 0;
+      const tick = () => {
+        if (abortSignal.aborted) {
+          chunks.push(sseFrame('content_block_delta', {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: ' [cancelled]' },
+          }));
+          chunks.push(
+            sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+            sseFrame('message_stop', { type: 'message_stop' }),
+          );
+          writeSse(res, chunks).catch(() => { /* ignore */ });
+          return;
+        }
+        if (i >= tokens.length) {
+          chunks.push(
+            sseFrame('content_block_stop', { type: 'content_block_stop', index: 0 }),
+            sseFrame('message_delta', {
+              type: 'message_delta',
+              delta: { stop_reason: 'end_turn', stop_sequence: null },
+              usage: { output_tokens: tokens.length },
+            }),
+            sseFrame('message_stop', { type: 'message_stop' }),
+          );
+          writeSse(res, chunks).catch(() => { /* ignore */ });
+          return;
+        }
+        const tok = tokens[i++];
+        chunks.push(sseFrame('content_block_delta', {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text: tok },
+        }));
+        setTimeout(tick, tokenDelayMs);
+      };
+      tick();
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  // eslint-disable-next-line no-console
+  console.log(`[fake-m3] streamPhoneReachChat listening on 127.0.0.1:${port} for bot=${bot}`);
   return {
     url: `http://127.0.0.1:${port}`,
     async close() {

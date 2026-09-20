@@ -16,7 +16,9 @@
     "test": "vitest run --reporter=default",
     "test:watch": "vitest",
     "test:smoke": "playwright test",
-    "test:all": "npm test && npm run test:smoke"
+    "test:all": "npm test && npm run test:smoke",
+    "dist": "electron-builder --win --publish never",
+    "dist:dir": "electron-builder --win --dir"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.1",
@@ -24,6 +26,7 @@
     "chokidar": "3.6.0",
     "croner": "^9.1.0",
     "diff": "5.2.2",
+    "electron-updater": "^6.8.9",
     "picomatch": "^4.0.7",
     "playwright-core": "^1.63.0",
     "react-arborist": "3.16.0",
@@ -47,5 +50,39 @@
     "vite": "^6.0.3",
     "vitest": "^2.1.9",
     "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.simthesexist.localbot",
+    "productName": "Localbot",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist/setup"
+    },
+    "files": [
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "dist/phone/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Localbot"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "simthesexist",
+        "repo": "LocalBot",
+        "channel": "latest"
+      }
+    ]
   }
 }
