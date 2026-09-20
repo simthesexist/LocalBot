@@ -1,17 +1,17 @@
 ---
 gsd_state_version: "1.0"
-status: phase_8_in_progress
-stopped_at: phase 8 plan 08-03 complete (2026-09-19)
-last_updated: "2026-09-20T06:34:28.430Z"
+status: phase_9_in_progress
+stopped_at: phase 9 plan 09-01 complete (2026-09-20)
+last_updated: "2026-09-20T08:55:00.000Z"
 last_activity: 2026-09-20
-state_head: f8a3f40d4bae966846c60c1fc692afd8511cebe5
+state_head: 6d9c941
 progress:
   total_phases: 9
-  completed_phases: 7
-  total_plans: 26
-  completed_plans: 26
-  percent: 77
-  verified_phases: 7
+  completed_phases: 8
+  total_plans: 29
+  completed_plans: 27
+  percent: 78
+  verified_phases: 8
   partial_phases: 0
 current_phase_name: Phone Reach + Ship
 ---
@@ -34,13 +34,13 @@ current_phase_name: Phone Reach + Ship
 
 ## Current Position
 
-- **Phase:** 7 — Obsidian Integration — 3/3 plans complete + verifier passed (07-01 vault core + 07-02 search/list/wikilink + 07-03 UI + E2E; 423 unit tests + 4 Playwright E2E green; build green)
-- **Phases complete:** 1, 2, 3, 4, 5, 6, 7 fully verified
-- **Branch:** `main` (clean); 27 commits ahead of origin/main
+- **Phase:** 9 — Phone Reach + Ship — 1/3 plans complete (09-01 WS control plane inside Electron main; 49 new tests across 4 suites green; TS build clean)
+- **Phases complete:** 1, 2, 3, 4, 5, 6, 7, 8 fully verified
+- **Branch:** `worktree-agent-afffb3a357298c63e` (3 commits ahead of origin/main); 09-01 work landed on per-agent branch
 - **Remote:** `https://github.com/simthesexist/LocalBot` (Public), 17 commits pushed
 
 ```
-[████████░░░░░░░░░░░░] 78% — 7 of 9 phases executed, 7 fully verified (Phases 1-7)
+[████████░░░░░░░░░░░░] 78% — 8 of 9 phases executed, 8 fully verified; Phase 9 in progress (1/3 plans)
 ```
 
 ## Performance Metrics
@@ -80,6 +80,11 @@ current_phase_name: Phone Reach + Ship
 - **SidebarBotRow reads `bot.status`, not a computed-within-60s check** — keeps the renderer dumb and the daemon authoritative (Plan 06-03); daemon emits `bot:status {status:'scheduled'}` on transitions only
 - **Audit minimization 3-key shape** — every `bots.run` audit row carries EXACTLY `{runId, trigger, messageCount}`; no scheduledPrompt text, no cron expression, no error stack (T-P6-19 mitigation; verified by 5 unit cases + 1 Playwright error-path E2E)
 - **happy-dom + createRoot + act() instead of @testing-library/react** — minimal dep surface, exercises real React 19 lifecycle; `// @vitest-environment happy-dom` per-file override keeps default node env for .test.ts
+- **`ws@^8.21.3` runtime dep** — pure-JS WebSocket library (no native compile; optionalDeps `bufferutil`/`utf-8-validate` not pulled by default); installed in Phase 9 Plan 1 for the HTTP+WS control plane inside Electron main
+- **`createRequire(__filename)` multi-path probe for daemon CJS modules** — tsc-dist layout (dist/main/network → dist/main/daemon) differs from vitest source layout (src/main/network → daemon); probe candidate paths in try/catch sequence so both environments resolve the same module (Phase 9 Plan 1, server.ts L58-73)
+- **`fs.createReadStream` error handler on static-serve paths** — when `afterEach` `fs.rmSync(rootDir)` races an in-flight stream read, ENOENT escapes uncaught; attaching `stream.on('error', () => res.writeHead(500).end())` converts the race into a clean 500 instead of an uncaught exception (Phase 9 Plan 1, commit 6d9c941)
+- **WebSocketServer-level `wss.on('error', noop)`** — `ws@8` emits 'error' on the WebSocketServer (not the underlying http.Server) for malformed upgrade frames; without a handler the error escapes as uncaught and pollutes vitest output (Phase 9 Plan 1, server.ts L131)
+- **Audit minimization on `network.bind` lifecycle row** — only `{event:'network.bind', host, port}`; never bindMode label, never client address, never per-connection metadata (T-9-04 mitigation; `bindMode` is implied by `host` — `0.0.0.0` already signals LAN opt-in)
 
 ### Open Questions
 

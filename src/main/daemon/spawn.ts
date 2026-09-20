@@ -311,7 +311,8 @@ function dispatchLine(line: string): void {
 export async function callBot(
   method: 'bots/list' | 'bots/create' | 'bots/delete' | 'bots/update' | 'bots/trigger' | 'bots/cancel'
     | 'vault/get_config' | 'vault/set_config'
-    | 'browser/get_screenshot' | 'browser/delete_context',
+    | 'browser/get_screenshot' | 'browser/delete_context'
+    | 'network/get_config' | 'network/set_config',
   args: Record<string, unknown>,
 ): Promise<unknown> {
   if (!initialized) throw new Error('daemon not initialized');

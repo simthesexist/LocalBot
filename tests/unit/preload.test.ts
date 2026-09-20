@@ -143,3 +143,34 @@ describe('preload bridge — existing typed surface (regression guard)', () => {
     expect(callArgs[0]).toBe(CHANNELS.EVENT_HISTORY_APPENDED);
   });
 });
+
+// Phase 9 Plan 1: api.network namespace — getConfig/setConfig/getReachInfo
+// forward to their corresponding invoke channels. The main process
+// (`src/main/ipc/network.ts`) validates shape BEFORE callBot, so the
+// renderer can rely on the preload bridge being a thin forwarding layer.
+describe('preload bridge — network namespace (Phase 9 Plan 1)', () => {
+  it('network.getConfig() invokes NETWORK_GET_CONFIG with no payload', async () => {
+    const api = EXPOSED_API as {
+      network: { getConfig: () => Promise<unknown> };
+    };
+    await api.network.getConfig();
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(CHANNELS.NETWORK_GET_CONFIG);
+  });
+
+  it('network.setConfig(cfg) invokes NETWORK_SET_CONFIG with the cfg payload', async () => {
+    const api = EXPOSED_API as {
+      network: { setConfig: (cfg: unknown) => Promise<unknown> };
+    };
+    const cfg = { port: 7878, bindMode: 'localhost', updateChannel: 'latest' };
+    await api.network.setConfig(cfg);
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(CHANNELS.NETWORK_SET_CONFIG, cfg);
+  });
+
+  it('network.getReachInfo() invokes NETWORK_GET_REACH_INFO with no payload', async () => {
+    const api = EXPOSED_API as {
+      network: { getReachInfo: () => Promise<unknown> };
+    };
+    await api.network.getReachInfo();
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(CHANNELS.NETWORK_GET_REACH_INFO);
+  });
+});

@@ -119,3 +119,27 @@ export async function ensureScreenshotDir(): Promise<string> {
 export function screenshotPath(runId: string, n: string): string {
   return path.join(screenshotDir(), runId, `${n}.png`);
 }
+
+// Phase 9 Plan 1: phone-reach network config file + phone bundle directory.
+//
+//   - network.json          — atomic JSON persisted by the daemon
+//                             (daemon/network/config.cjs); main reads it
+//                             at server.ts bind time.
+//   - phone-bundle/         — built phone UI (Wave 2 Vite target; Wave 1
+//                             only has index.html so servePhoneBundle has
+//                             a 200-able file).
+// `ensurePhoneBundleDir` is idempotent — called from main once on startup
+// AFTER the daemonspawn resolves; the test suite uses tmp dirs directly.
+export function networkConfigPath(): string {
+  return path.join(userDataDir(), 'network.json');
+}
+
+export function phoneBundleDir(): string {
+  return path.join(userDataDir(), 'phone-bundle');
+}
+
+export async function ensurePhoneBundleDir(): Promise<string> {
+  const dir = phoneBundleDir();
+  await fs.mkdir(dir, { recursive: true });
+  return dir;
+}

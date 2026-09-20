@@ -6,6 +6,7 @@ import type { LocalbotApi, LocalbotChannel } from '../../shared/window';
 import type {
   BrowserDeleteContextRequest,
   BrowserScreenshotRequest,
+  NetworkConfig,
 } from '../../shared/types';
 
 const EVENT_CHANNELS = new Set<string>([
@@ -112,6 +113,18 @@ const api: LocalbotApi = {
       ipcRenderer.invoke(CHANNELS.BROWSER_GET_SCREENSHOT, req),
     deleteContext: (req: BrowserDeleteContextRequest) =>
       ipcRenderer.invoke(CHANNELS.BROWSER_DELETE_CONTEXT, req),
+  },
+  // Phase 9 Plan 1: phone-reach network config IPC surface. The preload
+  // forwards each method to its corresponding invoke channel; main's
+  // src/main/ipc/network.ts validates config shape before callBot, so
+  // the renderer gets a clean inline error without round-tripping to the
+  // daemon. No event channels in Wave 1 — Wave 2 adds
+  // EVENT_REACH_INFO_UPDATED + EVENT_NETWORK_CONFIG_UPDATED.
+  network: {
+    getConfig: () => ipcRenderer.invoke(CHANNELS.NETWORK_GET_CONFIG),
+    setConfig: (cfg: NetworkConfig) =>
+      ipcRenderer.invoke(CHANNELS.NETWORK_SET_CONFIG, cfg),
+    getReachInfo: () => ipcRenderer.invoke(CHANNELS.NETWORK_GET_REACH_INFO),
   },
   // Generic IPC proxy: forwards `ipcRenderer.invoke(channel, payload?)` so
   // that callers (e.g. Playwright tests, future generic tools, ad-hoc dev

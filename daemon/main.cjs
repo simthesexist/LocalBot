@@ -16,6 +16,12 @@ const scheduler = require('./scheduler/index.cjs');
 // vault/get_config + vault/set_config JSON-RPC cases below.
 const vault = require('./vault/index.cjs');
 
+// Phase 9 Plan 1: persistent network control-plane config (port +
+// bindMode + updateChannel). Source of truth for `network/get_config` +
+// `network/set_config` JSON-RPC cases below. Mirrors the vault pattern
+// (atomic tmp+rename + persistQueue + defensive default on corrupt JSON).
+const network = require('./network/config.cjs');
+
 // Phase 8 Plan 1: browser automation core. Provides checkBrowserUrl (URL
 // allowlist + SSRF shield), ensureBrowser (lazy Chromium launch),
 // getPage (per-bot BrowserContext), deleteContext (bots/delete cleanup).
@@ -390,6 +396,11 @@ let userDataDirState = null;
 // initialize AND re-loaded after every vault/set_config so the tool handler
 // always sees fresh globalDeny (Pitfall 4: no cache).
 let currentVaultConfig = null;
+// Phase 9 Plan 1: network control-plane config (port + bindMode +
+// updateChannel). Stashed on initialize AND after every network/set_config
+// so future server.ts lookups see the fresh bindMode without an extra disk
+// read (Pitfall 4: no cache).
+let currentNetworkConfig = null;
 // Phase 8 Plan 1: per-bot browser config lives in each bot's config.json
 // (browserAllow/browserDeny/ssrfAllowInternal). No global module-scope
 // stash because the daemon never loads browser config globally — only
@@ -1235,6 +1246,119 @@ rl.on('line', async (line) => {
             error: { code: err.code || 'vault_set_config_failed', message: err.message },
           });
           replyError(id, err.code || 'vault_set_config_failed', err.message);
+          break;
+        }
+      }
+
+      // Phase 9 Plan 1: network/get_config — return the persisted network
+      // control-plane config (port + bindMode + updateChannel). Defensive:
+      // missing / corrupt JSON returns the defensive default
+      // {port:7878, bindMode:'localhost', updateChannel:'latest'} (never
+      // binds 0.0.0.0 on first read unless the user explicitly opted in).
+      case 'network/get_config': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) {
+            throw Object.assign(new Error('daemon not initialized'),
+              { code: 'daemon_not_initialized' });
+          }
+          const cfg = network.loadNetworkConfig(userDataDirState);
+          currentNetworkConfig = cfg;
+          audit.appendAudit({
+            tool: 'network.get_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'ok',
+            durationMs: Date.now() - startedAt,
+          });
+          replyResult(id, { ok: true, config: cfg });
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'network.get_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'network_get_config_failed', message: err.message },
+          });
+          replyError(id, err.code || 'network_get_config_failed', err.message);
+        }
+        break;
+      }
+
+      // Phase 9 Plan 1: network/set_config — validate the incoming shape
+      // and persist atomically. After save, mirror the written config into
+      // the module-scope currentNetworkConfig so the WS server (which reads
+      // it directly from disk at bind time, but may also be told to rebind
+      // by main in Wave 2) sees the fresh bindMode without an extra
+      // round-trip. The IPC bridge in src/main/ipc/network.ts broadcasts
+      // EVENT_NETWORK_CONFIG_UPDATED on a successful result.
+      case 'network/set_config': {
+        const startedAt = Date.now();
+        try {
+          if (!userDataDirState) {
+            throw Object.assign(new Error('daemon not initialized'),
+              { code: 'daemon_not_initialized' });
+          }
+          const cfg = params || {};
+          // Defense-in-depth shape validation BEFORE saveNetworkConfig so the
+          // error code stays {invalid_network_config} even if a future
+          // saveNetworkConfig refactor relaxes its checks.
+          if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+            throw Object.assign(new Error('network config must be an object'),
+              { code: 'invalid_network_config' });
+          }
+          if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) {
+            throw Object.assign(new Error('network config port must be integer in [1,65535]'),
+              { code: 'invalid_network_config' });
+          }
+          if (cfg.bindMode !== 'localhost' && cfg.bindMode !== 'lan') {
+            throw Object.assign(new Error("network config bindMode must be 'localhost' or 'lan'"),
+              { code: 'invalid_network_config' });
+          }
+          if (
+            cfg.updateChannel !== 'latest' &&
+            cfg.updateChannel !== 'beta' &&
+            cfg.updateChannel !== 'nightly'
+          ) {
+            throw Object.assign(new Error("network config updateChannel must be 'latest', 'beta', or 'nightly'"),
+              { code: 'invalid_network_config' });
+          }
+
+          network.saveNetworkConfig(userDataDirState, cfg)
+            .then((written) => {
+              currentNetworkConfig = written;
+              audit.appendAudit({
+                tool: 'network.set_config',
+                bot: currentBot,
+                params: {},
+                outcome: 'ok',
+                durationMs: Date.now() - startedAt,
+              });
+              replyResult(id, { ok: true, config: written });
+            })
+            .catch((err) => {
+              audit.appendAudit({
+                tool: 'network.set_config',
+                bot: currentBot,
+                params: {},
+                outcome: 'error',
+                durationMs: Date.now() - startedAt,
+                error: { code: err.code || 'network_set_config_failed', message: err.message },
+              });
+              replyError(id, err.code || 'network_set_config_failed', err.message);
+            });
+          break;
+        } catch (err) {
+          audit.appendAudit({
+            tool: 'network.set_config',
+            bot: currentBot,
+            params: {},
+            outcome: 'error',
+            durationMs: Date.now() - startedAt,
+            error: { code: err.code || 'network_set_config_failed', message: err.message },
+          });
+          replyError(id, err.code || 'network_set_config_failed', err.message);
           break;
         }
       }
