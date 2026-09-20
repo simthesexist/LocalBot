@@ -15,8 +15,12 @@ import { registerVaultHandlers } from './ipc/vault';
 // BROWSER_DELETE_CONTEXT) + app:// custom protocol handler for serving
 // screenshot PNGs to the renderer.
 import { registerBrowserHandlers } from './ipc/browser';
+// Phase 9 Plan 1: phone-reach + ship. registerNetworkHandlers is a pure
+// IPC channel registration (no I/O); startNetworkServer binds the HTTP +
+// WS control plane on the persisted host:port (default 127.0.0.1:7878).
+import { registerNetworkHandlers, startNetworkServer } from './network';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
-import { ensureUserDataDirs } from './paths';
+import { ensureUserDataDirs, phoneBundleDir, ensurePhoneBundleDir } from './paths';
 import { appendAuditLine } from './audit/logger';
 import { ensureTreeWatcherStarted } from './tree/list';
 
@@ -89,6 +93,9 @@ void app.whenReady().then(async () => {
   // registerBrowserHandlers requires app to be ready) but AFTER the
   // scheme registration above (top-level).
   registerBrowserHandlers();
+  // Phase 9 Plan 1: network config IPC. Pure channel registration; no
+  // side effects.
+  registerNetworkHandlers();
 
   createMainWindow();
 
@@ -97,6 +104,27 @@ void app.whenReady().then(async () => {
   // Wire the daemon's tree:refresh notifications to the renderer's
   // EVENT_TREE_REFRESH broadcast.
   ensureTreeWatcherStarted();
+
+  // Phase 9 Plan 1: bind the HTTP+WS control plane AFTER the daemon
+  // spawn resolves (so `network/get_config` is reachable if the renderer
+  // fires it on first paint). The promise is fire-and-forget here so a
+  // bind failure (port collision, etc.) doesn't block window boot; the
+  // bind error is logged via the audit row inside startNetworkServer.
+  // The network handle is stashed on `app` so the module-level
+  // `before-quit` handler below can close it on shutdown.
+  void (async () => {
+    try {
+      await ensurePhoneBundleDir();
+      const handle = await startNetworkServer({ phoneBundleDir: phoneBundleDir() });
+      // Stash the handle on `app` so the app-level before-quit teardown
+      // can close it (only one before-quit handler — keeps Electron's
+      // async-handler ordering simpler than registering two).
+      (app as unknown as { __networkHandle?: typeof handle }).__networkHandle = handle;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[network] startNetworkServer failed', err);
+    }
+  })();
 
   app.on('activate', () => {
     if (require('electron').BrowserWindow.getAllWindows().length === 0) {
@@ -113,5 +141,12 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('before-quit', async () => {
+  // Phase 9 Plan 1: close the WS endpoint BEFORE stopping the daemon so
+  // an in-flight sendMessage aborts cleanly (otherwise its on('close')
+  // handler tries to forward to a dead daemon).
+  const handle = (app as unknown as { __networkHandle?: { close: () => Promise<void> } }).__networkHandle;
+  if (handle) {
+    try { await handle.close(); } catch { /* ignore */ }
+  }
   await stopDaemon();
 });

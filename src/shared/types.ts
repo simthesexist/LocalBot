@@ -675,3 +675,84 @@ export interface BrowserScreenshotResult {
 export interface BrowserDeleteContextRequest {
   bot: string;
 }
+
+// ─── Phase 9: phone reach + ship ──────────────────────────────────────────
+
+/**
+ * Phase 9 Plan 1: persisted network control-plane config shape.
+ * Mirrors `<userData>/network.json`. Three keys:
+ *   - `port` (1..65535) — TCP port the HTTP+WS server binds on
+ *   - `bindMode` — 'localhost' (127.0.0.1) or 'lan' (0.0.0.0); the
+ *     LAN opt-in is the trigger for Wave 2's `bindMode` toggle UX
+ *   - `updateChannel` — 'latest' | 'beta' | 'nightly' (electron-updater
+ *     selection lands in Wave 3)
+ *
+ * Both ends (main IPC handler + daemon JSON-RPC handler) validate the
+ * shape with the same rules; a write that drifts is rejected with
+ * {code: 'invalid_network_config'} on both sides.
+ */
+export interface NetworkConfig {
+  port: number;
+  bindMode: 'localhost' | 'lan';
+  updateChannel: 'latest' | 'beta' | 'nightly';
+}
+
+/**
+ * Wire shape returned by `network:get_config` and `network:set_config`
+ * invoke channels. On error, `ok` is false and `error` carries a short
+ * code (e.g. `invalid_network_config`) that the renderer surfaces inline
+ * next to the form field.
+ */
+export interface NetworkConfigResult {
+  ok: boolean;
+  config?: NetworkConfig;
+  error?: string;
+}
+
+/**
+ * Phase 9 Plan 1: shape returned by `network:get_reach_info`. Wave 1
+ * returns `{tailscale:false, lanIps:[]}`; Wave 2 wires
+ * `tailscale:boolean`, `magicDnsName?:string`, `lanIps:string[]` after
+ * adding the Tailscale detector + event channel.
+ */
+export interface ReachInfo {
+  tailscale: boolean;
+  magicDnsName?: string;
+  lanIps: string[];
+  error?: string;
+}
+
+/**
+ * Phase 9 Plan 2 forward-compat: ReachInfo stamped with `at` so the
+ * EVENT_REACH_INFO_UPDATED broadcast can be ordered chronologically.
+ * Not emitted in Wave 1.
+ */
+export interface ReachInfoEvent extends ReachInfo {
+  at: number;
+}
+
+/**
+ * Phase 9 Plan 1: WS envelope for phone→main sendMessage frames.
+ * Mirrors the IPC SendMessageRequest shape; `bot` is optional (defaults
+ * to 'default') so the phone can omit it when chatting with the
+ * implicit default bot.
+ */
+export interface WsSendMessageRequest {
+  msgId: string;
+  content: string;
+  bot?: string;
+}
+
+/**
+ * Phase 9 Plan 3 forward-compat: UpdateStatusEvent shape for the
+ * EVENT_UPDATE_STATUS_CHANGED broadcast (Wave 3's electron-updater
+ * wiring). Declared here so Wave 1's preload + types already know the
+ * shape when Wave 3 lands.
+ */
+export interface UpdateStatusEvent {
+  state: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
+  currentVersion?: string;
+  availableVersion?: string;
+  progress?: { percent: number };
+  error?: string;
+}

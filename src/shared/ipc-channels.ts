@@ -79,6 +79,13 @@ export const CHANNELS = {
   EVENT_BROWSER_CONFIG_UPDATED: 'browser:config:updated',
   EVENT_BROWSER_PAGE_CLOSED: 'browser:page:closed',
 
+  // Phase 9 Plan 1: phone reach + ship network config. Renderer → main
+  // invokes (config get/set + Reach info); the EVENT_REACH_INFO_UPDATED +
+  // EVENT_UPDATE_STATUS_CHANGED broadcasts land in Waves 2 + 3.
+  NETWORK_GET_CONFIG: 'network:get_config',
+  NETWORK_SET_CONFIG: 'network:set_config',
+  NETWORK_GET_REACH_INFO: 'network:get_reach_info',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

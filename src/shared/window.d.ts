@@ -35,6 +35,9 @@ import type {
   MemoryReadResult,
   MemoryUpdatedEvent,
   NavigateToBotEvent,
+  NetworkConfig,
+  NetworkConfigResult,
+  ReachInfo,
   ScheduledErrorEvent,
   SessionEntry,
   ShellExitEvent,
@@ -177,6 +180,21 @@ export interface LocalbotApi {
   browser: {
     getScreenshot: (req: BrowserScreenshotRequest) => Promise<BrowserScreenshotResult>;
     deleteContext: (req: BrowserDeleteContextRequest) => Promise<{ ok: boolean; error?: string }>;
+  };
+  /**
+   * Phase 9 Plan 1: phone-reach network config IPC surface. getConfig +
+   * setConfig route through `src/main/ipc/network.ts` to the daemon's
+   * network/get_config + network/set_config JSON-RPC cases. On a
+   * successful set, main writes a `lifecycle` audit row but does NOT
+   * broadcast a config-updated event yet — Wave 2 adds the event +
+   * NetworkSettingsModal subscribers. getReachInfo is a Wave 1
+   * placeholder returning `{tailscale:false, lanIps:[]}`; the Tailscale
+   * detector + ReachInfoPill mount in Wave 2.
+   */
+  network: {
+    getConfig: () => Promise<NetworkConfigResult>;
+    setConfig: (cfg: NetworkConfig) => Promise<NetworkConfigResult>;
+    getReachInfo: () => Promise<ReachInfo>;
   };
   /**
    * One-way: ask the main process to re-send `app:init`. The renderer calls

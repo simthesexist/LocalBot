@@ -26,7 +26,8 @@
     "picomatch": "^4.0.7",
     "playwright-core": "^1.63.0",
     "react-arborist": "3.16.0",
-    "react-diff-viewer-continued": "4.4.0"
+    "react-diff-viewer-continued": "4.4.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
