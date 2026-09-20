@@ -169,8 +169,21 @@ export function NetworkSettingsModal({ open, onClose }: NetworkSettingsModalProp
             ))}
           </div>
           <small className="form-hint">
-            Channel switching requires restart in v1.
+            Changing the update channel requires restarting Localbot to take
+            effect (Pitfall 6 mitigation).
           </small>
+          <div className="form-actions" style={{ marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="modal-button secondary"
+              onClick={() => {
+                void window.localbot?.network.checkForUpdate();
+              }}
+              data-testid="network-settings-check-update"
+            >
+              Check for updates
+            </button>
+          </div>
         </section>
 
         {error && !saveError && !rebindError && (

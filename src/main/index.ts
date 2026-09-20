@@ -25,6 +25,7 @@ import {
   broadcastReachInfo,
   setCurrentNetworkHandle,
 } from './network';
+import { initUpdater } from './network/updater';
 import { detectReach, clearCache } from './network/tailscale';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs, phoneBundleDir, ensurePhoneBundleDir } from './paths';
@@ -145,6 +146,22 @@ void app.whenReady().then(async () => {
         win.webContents.send(CHANNELS.EVENT_REACH_INFO_UPDATED, { ...info, at: Date.now() });
       }
     }
+  });
+
+  // Phase 9 Plan 3: initialize electron-updater (manual flow) and forward
+  // each status change to every BrowserWindow via EVENT_UPDATE_STATUS_CHANGED.
+  // initUpdater sets autoDownload=false + autoInstallOnAppQuit=false +
+  // channel from network.json (Pitfall 6 mitigation) BEFORE registering
+  // any autoUpdater.on() handlers.
+  void initUpdater((status) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(CHANNELS.EVENT_UPDATE_STATUS_CHANGED, status);
+      }
+    }
+  }).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[updater] initUpdater failed', err);
   });
   const reachInterval = setInterval(() => {
     void (async () => {
