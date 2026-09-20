@@ -13,34 +13,39 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type StatusHandler = (info: { version: string } | Error | { percent: number }) => void;
+vi.mock('electron-updater', () => {
+  const mock: any = {
+    autoDownload: false,
+    autoInstallOnAppQuit: false,
+    channel: 'latest',
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
+    checkForUpdates: vi.fn().mockResolvedValue(undefined),
+    downloadUpdate: vi.fn().mockResolvedValue(undefined),
+    quitAndInstall: vi.fn(),
+  };
+  mock.__handlers = {};
+  mock.on.mockImplementation((event: string, handler: (...args: any[]) => void) => {
+    mock.__handlers[event] = handler;
+    return mock;
+  });
+  mock.removeAllListeners.mockImplementation(() => {
+    Object.keys(mock.__handlers).forEach((k) => { delete mock.__handlers[k]; });
+  });
+  (globalThis as any).__updaterMock = mock;
+  return { autoUpdater: mock };
+});
 
-const eventHandlers: Record<string, StatusHandler> = {};
-let configuredChannel = 'latest';
-let configuredAutoDownload: boolean | null = null;
-let configuredAutoInstallOnAppQuit: boolean | null = null;
-const mockAutoUpdater = {
-  // vi.mock factory reads these on import; reassign in beforeEach for isolation.
-  set channel(value: string) { configuredChannel = value; },
-  get channel() { return configuredChannel; },
-  set autoDownload(value: boolean) { configuredAutoDownload = value; },
-  get autoDownload() { return configuredAutoDownload ?? false; },
-  set autoInstallOnAppQuit(value: boolean) { configuredAutoInstallOnAppQuit = value; },
-  get autoInstallOnAppQuit() { return configuredAutoInstallOnAppQuit ?? false; },
-  on: vi.fn((event: string, handler: StatusHandler) => { eventHandlers[event] = handler; }),
-  checkForUpdates: vi.fn().mockResolvedValue(undefined),
-  downloadUpdate: vi.fn().mockResolvedValue(undefined),
-  quitAndInstall: vi.fn(),
-};
+vi.mock('D:/Claude/Grokbot/.claude/worktrees/agent-ae4e0b136c8724388/daemon/network/config.cjs', () => {
+  const fn = vi.fn(async () => ({
+    updateChannel: 'beta',
+    port: 7878,
+    bindMode: 'localhost',
+  }));
+  return { loadNetworkConfig: fn };
+});
 
-vi.mock('electron-updater', () => ({ autoUpdater: mockAutoUpdater }));
-
-// mock loadNetworkConfig to control the channel returned at startup.
-vi.mock('../../daemon/network/config.cjs', () => ({
-  loadNetworkConfig: vi.fn().mockResolvedValue({ updateChannel: 'beta', port: 7878, bindMode: 'localhost' }),
-}));
-
-vi.mock('../src/main/paths', () => ({
+vi.mock('../../src/main/paths', () => ({
   userDataDir: () => '/tmp/test-userdata',
 }));
 
@@ -52,82 +57,88 @@ import {
   downloadNow,
   installNow,
   getUpdateStatus,
-} from '../src/main/network/updater';
+} from '../../src/main/network/updater';
+
+const harness = () => (globalThis as any).__updaterMock as {
+  autoDownload: boolean;
+  autoInstallOnAppQuit: boolean;
+  channel: string;
+  on: ReturnType<typeof vi.fn>;
+  checkForUpdates: ReturnType<typeof vi.fn>;
+  downloadUpdate: ReturnType<typeof vi.fn>;
+  quitAndInstall: ReturnType<typeof vi.fn>;
+  __handlers: Record<string, (...args: any[]) => void>;
+};
 
 describe('updater.ts — manual update flow', () => {
   beforeEach(() => {
-    Object.keys(eventHandlers).forEach((k) => { delete eventHandlers[k]; });
-    mockAutoUpdater.on.mockClear();
-    mockAutoUpdater.checkForUpdates.mockClear();
-    mockAutoUpdater.downloadUpdate.mockClear();
-    mockAutoUpdater.quitAndInstall.mockClear();
-    configuredAutoDownload = null;
-    configuredAutoInstallOnAppQuit = null;
-    configuredChannel = 'latest';
+    const h = harness();
+    h.on.mockClear();
+    h.checkForUpdates.mockClear();
+    h.downloadUpdate.mockClear();
+    h.quitAndInstall.mockClear();
+    Object.keys(h.__handlers).forEach((k) => { delete h.__handlers[k]; });
+    h.autoDownload = false;
+    h.autoInstallOnAppQuit = false;
+    h.channel = 'latest';
   });
 
   it('Case A: initUpdater sets autoDownload=false AND autoInstallOnAppQuit=false (Pitfall 4)', async () => {
     const handler = vi.fn();
     await initUpdater(handler);
-    expect(mockAutoUpdater.autoDownload).toBe(false);
-    expect(mockAutoUpdater.autoInstallOnAppQuit).toBe(false);
+    expect(harness().autoDownload).toBe(false);
+    expect(harness().autoInstallOnAppQuit).toBe(false);
   });
 
   it('Case B: initUpdater sets autoUpdater.channel from network.json BEFORE on() handlers (Pitfall 6)', async () => {
-    const channelSetterOrder: string[] = [];
-    // Re-mock with instrumentation to capture order — simpler approach:
-    // we already verified channel set to 'beta' from the mocked config.cjs
     const handler = vi.fn();
     await initUpdater(handler);
-    // The mock config returned { updateChannel: 'beta' } — assert the
-    // autoUpdater.channel setter received that exact value.
-    expect(configuredChannel).toBe('beta');
-    // Sanity: every event handler is registered after the channel was set.
-    expect(mockAutoUpdater.on).toHaveBeenCalled();
-    void channelSetterOrder;
+    expect(harness().channel).toBe('beta');
+    expect(harness().on).toHaveBeenCalled();
   });
 
   it('Case C: checkNow() invokes autoUpdater.checkForUpdates() exactly once', async () => {
     await initUpdater(() => {});
     await checkNow();
-    expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(harness().checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
   it('Case D: downloadNow() → downloadUpdate(); installNow() → quitAndInstall()', async () => {
     await initUpdater(() => {});
     await downloadNow();
-    expect(mockAutoUpdater.downloadUpdate).toHaveBeenCalledTimes(1);
+    expect(harness().downloadUpdate).toHaveBeenCalledTimes(1);
     installNow();
-    expect(mockAutoUpdater.quitAndInstall).toHaveBeenCalledTimes(1);
+    expect(harness().quitAndInstall).toHaveBeenCalledTimes(1);
   });
 
   it('Case E: onChange callback fires with the matching status on each event', async () => {
     const handler = vi.fn();
     await initUpdater(handler);
-    expect(eventHandlers['checking-for-update']).toBeDefined();
-    eventHandlers['checking-for-update']?.(undefined as never);
+    const h = harness();
+    expect(h.__handlers['checking-for-update']).toBeDefined();
+    h.__handlers['checking-for-update']?.(undefined);
     expect(handler).toHaveBeenLastCalledWith({ state: 'checking' });
 
-    eventHandlers['update-available']?.({ version: '0.2.0' });
+    h.__handlers['update-available']?.({ version: '0.2.0' });
     expect(handler).toHaveBeenLastCalledWith({
       state: 'available',
       currentVersion: '0.2.0',
       availableVersion: '0.2.0',
     });
 
-    eventHandlers['download-progress']?.({ percent: 42.5 });
+    h.__handlers['download-progress']?.({ percent: 42.5 });
     expect(handler).toHaveBeenLastCalledWith({
       state: 'downloading',
       progress: { percent: 42.5 },
     });
 
-    eventHandlers['update-downloaded']?.({ version: '0.2.0' });
+    h.__handlers['update-downloaded']?.({ version: '0.2.0' });
     expect(handler).toHaveBeenLastCalledWith({
       state: 'downloaded',
       availableVersion: '0.2.0',
     });
 
-    eventHandlers['error']?.(new Error('boom'));
+    h.__handlers['error']?.(new Error('boom'));
     expect(handler).toHaveBeenLastCalledWith({
       state: 'error',
       error: 'boom',

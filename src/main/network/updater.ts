@@ -12,12 +12,11 @@
 //     downloading progress / error dismiss).
 
 import { autoUpdater } from 'electron-updater';
-import { loadNetworkConfig } from '../../daemon/network/config.cjs';
+import { loadNetworkConfig } from '../../../daemon/network/config.cjs';
 import { userDataDir } from '../paths';
 import type { UpdateStatusEvent } from '../../shared/types';
 
 let status: UpdateStatusEvent = { state: 'idle' };
-let initialized = false;
 
 export function getUpdateStatus(): UpdateStatusEvent {
   return status;
@@ -26,9 +25,6 @@ export function getUpdateStatus(): UpdateStatusEvent {
 export async function initUpdater(
   onChange: (s: UpdateStatusEvent) => void,
 ): Promise<void> {
-  if (initialized) return;
-  initialized = true;
-
   try {
     const cfg = await loadNetworkConfig(userDataDir());
     // Pitfall 6: set channel BEFORE first checkForUpdates() so the user's
@@ -45,6 +41,7 @@ export async function initUpdater(
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
+  autoUpdater.removeAllListeners();
   autoUpdater.on('checking-for-update', () => {
     status = { state: 'checking' };
     onChange(status);
