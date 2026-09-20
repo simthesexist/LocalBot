@@ -92,7 +92,10 @@ export type LocalbotChannel =
   | 'browser:get_screenshot'
   | 'browser:delete_context'
   | 'browser:config:updated'
-  | 'browser:page:closed';
+  | 'browser:page:closed'
+  // Phase 9 Plan 2: network config + reach info event broadcasts.
+  | 'network:config:updated'
+  | 'network:reach:updated';
 
 export type LocalbotEventPayload =
   | TokenEvent
