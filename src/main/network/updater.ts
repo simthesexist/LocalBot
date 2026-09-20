@@ -12,6 +12,7 @@
 //     downloading progress / error dismiss).
 
 import { autoUpdater } from 'electron-updater';
+// @ts-expect-error — daemon/network/config.cjs is CommonJS without bundled .d.ts; loadNetworkConfig returns NetworkConfig at runtime
 import { loadNetworkConfig } from '../../../daemon/network/config.cjs';
 import { userDataDir } from '../paths';
 import type { UpdateStatusEvent } from '../../shared/types';
