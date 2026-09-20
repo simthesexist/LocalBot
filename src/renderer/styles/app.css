@@ -1956,3 +1956,69 @@ html, body, #root {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
 }
+
+/* ─── Phase 9 Plan 2: ReachInfoPill + NetworkSettingsModal ─── */
+
+.reach-info-pill {
+  display: inline-block;
+  padding: 0.3rem 0.7rem;
+  border-radius: 1rem;
+  background: #007aff;
+  color: #fff;
+  font-size: 0.85rem;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  border: none;
+  position: fixed;
+  top: 6px;
+  right: 12px;
+  z-index: 1100;
+}
+
+.reach-info-pill.muted {
+  background: #888;
+}
+
+.reach-info-pill:hover {
+  filter: brightness(1.1);
+}
+
+.reach-info-pill:focus-visible {
+  outline: 2px solid var(--lb-tree-focus, #2563eb);
+  outline-offset: 2px;
+}
+
+.network-settings-modal .modal-card {
+  min-width: 480px;
+  max-width: 640px;
+}
+
+.network-settings-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 16px 20px;
+}
+
+.network-settings-modal .form-section {
+  margin-bottom: 4px;
+}
+
+.network-settings-modal .radio-group {
+  display: flex;
+  gap: 1rem;
+  margin-top: 4px;
+}
+
+.network-settings-modal .form-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.network-settings-modal .form-radio input[type="radio"]:disabled + span {
+  color: var(--color-text-muted, #6b7280);
+  cursor: not-allowed;
+}

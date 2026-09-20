@@ -40,6 +40,11 @@ const EVENT_CHANNELS = new Set<string>([
   // browser page is closed).
   CHANNELS.EVENT_BROWSER_CONFIG_UPDATED,
   CHANNELS.EVENT_BROWSER_PAGE_CLOSED,
+  // Phase 9 Plan 2: network config change (post-rebind) + reach-info
+  // refresh (5s TTL). Renderer subscribes via the renderer's state/network.ts
+  // module and refreshes on each event.
+  CHANNELS.EVENT_NETWORK_CONFIG_UPDATED,
+  CHANNELS.EVENT_REACH_INFO_UPDATED,
 ]);
 
 function on(channel: string, handler: (payload: any) => void): () => void {

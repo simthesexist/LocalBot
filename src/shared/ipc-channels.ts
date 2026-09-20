@@ -86,6 +86,11 @@ export const CHANNELS = {
   NETWORK_SET_CONFIG: 'network:set_config',
   NETWORK_GET_REACH_INFO: 'network:get_reach_info',
 
+  // Phase 9 Plan 2: events emitted by main on reach-info refresh (5s TTL)
+  // and on successful rebind after a bindMode/port toggle.
+  EVENT_NETWORK_CONFIG_UPDATED: 'network:config:updated',
+  EVENT_REACH_INFO_UPDATED: 'network:reach:updated',
+
   // Lifecycle
   LIFECYCLE: 'lifecycle',
 } as const;

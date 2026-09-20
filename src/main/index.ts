@@ -1,6 +1,6 @@
 // Electron main entry.
 
-import { app, protocol } from 'electron';
+import { app, protocol, BrowserWindow } from 'electron';
 import { createMainWindow } from './window';
 import { registerKeyHandlers } from './ipc/key';
 import { registerChatHandlers } from './ipc/chat';
@@ -18,9 +18,17 @@ import { registerBrowserHandlers } from './ipc/browser';
 // Phase 9 Plan 1: phone-reach + ship. registerNetworkHandlers is a pure
 // IPC channel registration (no I/O); startNetworkServer binds the HTTP +
 // WS control plane on the persisted host:port (default 127.0.0.1:7878).
-import { registerNetworkHandlers, startNetworkServer } from './network';
+import {
+  registerNetworkHandlers,
+  startNetworkServer,
+  subscribeReachInfo,
+  broadcastReachInfo,
+  setCurrentNetworkHandle,
+} from './network';
+import { detectReach, clearCache } from './network/tailscale';
 import { spawnDaemon, stopDaemon } from './daemon/spawn';
 import { ensureUserDataDirs, phoneBundleDir, ensurePhoneBundleDir } from './paths';
+import { CHANNELS } from '../shared/ipc-channels';
 import { appendAuditLine } from './audit/logger';
 import { ensureTreeWatcherStarted } from './tree/list';
 
@@ -116,6 +124,7 @@ void app.whenReady().then(async () => {
     try {
       await ensurePhoneBundleDir();
       const handle = await startNetworkServer({ phoneBundleDir: phoneBundleDir() });
+      setCurrentNetworkHandle(handle);
       // Stash the handle on `app` so the app-level before-quit teardown
       // can close it (only one before-quit handler — keeps Electron's
       // async-handler ordering simpler than registering two).
@@ -125,6 +134,33 @@ void app.whenReady().then(async () => {
       console.error('[network] startNetworkServer failed', err);
     }
   })();
+
+  // Phase 9 Plan 2: subscribe to reach-info broadcasts and forward each
+  // ReachInfo to every BrowserWindow via EVENT_REACH_INFO_UPDATED.
+  // Periodic 5s refresh matches the tailscale cache TTL — pushes a fresh
+  // value when the Tailscale state changes without flooding IPC.
+  const unsubscribeReach = subscribeReachInfo((info) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send(CHANNELS.EVENT_REACH_INFO_UPDATED, { ...info, at: Date.now() });
+      }
+    }
+  });
+  const reachInterval = setInterval(() => {
+    void (async () => {
+      try {
+        clearCache();
+        const info = await detectReach();
+        broadcastReachInfo(info);
+      } catch {
+        /* swallow — periodic refresh must never crash main */
+      }
+    })();
+  }, 5000);
+  app.on('before-quit', () => {
+    try { unsubscribeReach(); } catch { /* ignore */ }
+    try { clearInterval(reachInterval); } catch { /* ignore */ }
+  });
 
   app.on('activate', () => {
     if (require('electron').BrowserWindow.getAllWindows().length === 0) {
