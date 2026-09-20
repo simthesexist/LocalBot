@@ -179,7 +179,9 @@ export function dispatchWsMessage(ws: unknown, _req: http.IncomingMessage): Prom
       activeWsRuns.set(msg.msgId, ac);
 
       const startedAt = Date.now();
-      const bot = msg.bot;
+      // Default bot to 'default' when the phone omits the field — mirrors
+      // chat.ts L155 (typeof req.bot === 'string' && req.bot.length > 0).
+      const bot = (typeof msg.bot === 'string' && msg.bot.length > 0) ? msg.bot : 'default';
 
       // Mirror chat.ts sendMessageStarted so the phone can render a
       // optimistic "thinking" pill without waiting for the first token.

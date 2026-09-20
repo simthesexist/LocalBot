@@ -34,17 +34,45 @@ import { userDataDir } from '../paths';
 
 // CommonJS require for the daemon-side config.cjs. tsc compiles this file
 // to dist/main/network/server.js; the daemon/ tree is recursively copied
-// to dist/main/daemon/ at build time (see package.json scripts.build:main),
-// so the relative path below resolves correctly in BOTH source-relative
-// vitest runs AND the production dist bundle.
+// to dist/main/daemon/ at build time (see package.json scripts.build:main).
+//
+// Path resolution differs by environment, so we probe candidate paths:
+//   - source TS:    src/main/network/server.ts → ../../daemon/network/config.cjs
+//                   (3 segments up because daemon lives at the repo root,
+//                   not inside src/)
+//   - dist JS:      dist/main/network/server.js → ../../daemon/network/config.cjs
+//                   (because cpSync copies daemon/ to dist/main/daemon/)
+// The dynamic-import dance + a sequence of fallback paths keeps both
+// environments resolving to the same module.
 const _require = createRequire(__filename);
-const networkConfig = _require(path.join(__dirname, '..', '..', 'daemon', 'network', 'config.cjs')) as {
+
+function loadDaemonNetworkConfig(): {
   loadNetworkConfig: (userDataDir: string) => {
     port: number;
     bindMode: 'localhost' | 'lan';
     updateChannel: 'latest' | 'beta' | 'nightly';
   };
-};
+} {
+  // Probe a sequence of candidate paths. The first one that resolves wins.
+  // Order: dist/runtime first (production), then source-relative (vitest).
+  const candidates = [
+    path.join(__dirname, '..', '..', 'daemon', 'network', 'config.cjs'),         // dist/main/network → dist/main/daemon/network
+    path.join(__dirname, '..', '..', '..', 'daemon', 'network', 'config.cjs'),   // src/main/network → daemon/network
+  ];
+  let lastErr: unknown;
+  for (const candidate of candidates) {
+    try {
+      return _require(candidate) as ReturnType<typeof loadDaemonNetworkConfig>;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(
+    `Could not load daemon/network/config.cjs from any candidate path. Last error: ${(lastErr as Error)?.message ?? lastErr}`,
+  );
+}
+
+const networkConfig = loadDaemonNetworkConfig();
 
 export interface NetworkServerHandle {
   host: string;
@@ -95,6 +123,11 @@ export async function startNetworkServer(opts: StartNetworkServerOptions): Promi
   // share the port.
   const wss = new WebSocketServer({ server });
 
+  // Catch ws-level errors (e.g. malformed upgrade frames) so an unrelated
+  // client error doesn't bring down the dispatch loop. ws emits 'error'
+  // on the WebSocketServer, NOT on the underlying http.Server.
+  wss.on('error', () => { /* keep ws server alive on per-connection errors */ });
+
   wss.on('connection', (ws, req) => {
     // Fire-and-forget per ws connection. dispatchWsMessage resolves only
     // when the connection closes; we don't await here so a stuck client
@@ -102,24 +135,33 @@ export async function startNetworkServer(opts: StartNetworkServerOptions): Promi
     void dispatchWsMessage(ws, req);
   });
 
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const onError = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      server.removeListener('listening', onListening);
-      reject(err);
-    };
-    const onListening = () => {
-      if (settled) return;
-      settled = true;
-      server.removeListener('error', onError);
-      resolve();
-    };
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(port, host);
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const onError = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        server.removeListener('listening', onListening);
+        reject(err);
+      };
+      const onListening = () => {
+        if (settled) return;
+        settled = true;
+        server.removeListener('error', onError);
+        resolve();
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(port, host);
+    });
+  } catch (err) {
+    // Tear down the half-bound server so EADDRINUSE failures don't leak
+    // a zombie socket (Pitfall: a port stuck in TIME_WAIT after the test
+    // would block the NEXT startNetworkServer run).
+    try { server.close(); } catch { /* ignore */ }
+    try { wss.close(); } catch { /* ignore */ }
+    throw err;
+  }
 
   // Audit row for the bind event (T-9-04 minimization).
   // `host` carries the bind intent (127.0.0.1 vs 0.0.0.0) but NEVER the

@@ -86,7 +86,14 @@ export function servePhoneBundle(req: http.IncomingMessage, res: http.ServerResp
       return;
     }
     res.writeHead(200, { 'Content-Type': contentTypeFor(full) });
-    fs.createReadStream(full).pipe(res);
+    const stream = fs.createReadStream(full);
+    // Surface stream errors as 500 instead of leaving them uncaught.
+    stream.on('error', () => {
+      if (!res.writableEnded) {
+        res.writeHead(500).end();
+      }
+    });
+    stream.pipe(res);
     return;
   }
 
@@ -111,7 +118,15 @@ export function servePhoneBundle(req: http.IncomingMessage, res: http.ServerResp
       return;
     }
     res.writeHead(200, { 'Content-Type': contentTypeFor(full) });
-    fs.createReadStream(full).pipe(res);
+    const stream = fs.createReadStream(full);
+    // Surface stream errors as 500 instead of leaving them uncaught
+    // (closure during cleanup can race with in-flight reads).
+    stream.on('error', () => {
+      if (!res.writableEnded) {
+        res.writeHead(500).end();
+      }
+    });
+    stream.pipe(res);
     return;
   }
 
