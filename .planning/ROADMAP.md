@@ -207,12 +207,12 @@ Plans:
   4. The UI shows the current Tailscale MagicDNS name so the user knows how to reach the app from a phone
   5. App builds to a single Windows .exe installer via electron-builder, installs cleanly, and exposes a manual update-check on a configurable channel (no auto-install)
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 
 - [x] 09-01-PLAN.md
-- [ ] 09-02-PLAN.md
+- [x] 09-02-PLAN.md
 - [ ] 09-03-PLAN.md
 - [x] `09-01-PLAN.md` — Wave 1 *(tracer)*: install ws@^8.21.3; daemon/network/config.cjs atomic <userData>/network.json (mirror vault pattern); daemon/main.cjs network/get_config + network/set_config JSON-RPC; src/main/network/{server,handlers,static,index}.ts (localhost-only WS server + per-msgId AbortController + runAgenticLoop reuse + path-traversal guard); src/main/ipc/network.ts (NETWORK_GET/SET_CONFIG + GET_REACH_INFO placeholder); shared types + ipc-channels + window.d.ts + paths + preload extensions; 3 new Vitest suites (ws_server + ws_handlers + network_config = 38 cases) + preload extension (+3 cases); TS build clean. [covers NET-01 + NET-02]
 - [ ] `09-02-PLAN.md` — Wave 2 *(blocked on Wave 1)*: src/main/network/tailscale.ts (state.json parse + 5s cache + os.networkInterfaces fallback); src/main/network/server.ts rebind implementation (open NEW before close OLD, Pitfall 2 mitigation); src/main/network/index.ts currentNetworkHandle + subscribeReachInfo; src/main/ipc/network.ts NETWORK_GET_REACH_INFO + rebind trigger + EVENT_REACH_INFO_UPDATED broadcast; src/phone/ separate Vite target (index.html + main.tsx + vite.config.ts + Composer + MessageBubble + Chat + styles.css) producing dist/phone/; src/renderer state/network.ts + components/{NetworkSettingsModal,ReachInfoPill} + App.tsx mount + styles/app.css; tests/unit/tailscale.test.ts >= 6 cases. [covers NET-03 + NET-04]
@@ -232,7 +232,7 @@ Plans:
 | 6. Scheduler + Notifications | 3/3 | Complete | 2026-09-19 |
 | 7. Obsidian Integration | 3/3 | Complete | 2026-09-19 |
 | 8. Browser Automation | 3/3 | Complete | 2026-09-19 |
-| 9. Phone Reach + Ship | 1/3 | In Progress|  |
+| 9. Phone Reach + Ship | 2/3 | In Progress|  |
 
 ---
 
