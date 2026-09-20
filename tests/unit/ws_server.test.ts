@@ -221,10 +221,16 @@ describe('network.server — startNetworkServer', () => {
     expect(gotError).toBe(true);
   });
 
-  it('Case F: handle.rebind() throws in Wave 1 (forward-compat for Wave 2)', async () => {
+  it('Case F: handle.rebind() opens new bind and updates host/port in Wave 2', async () => {
     const ephemeralPort = 30000 + Math.floor(Math.random() * 10000);
     fx = await bootServer({ port: ephemeralPort, bindMode: 'localhost', updateChannel: 'latest' });
-    await expect(fx.handle.rebind('0.0.0.0', 7878)).rejects.toThrow(/rebind not implemented/i);
+    // Rebind to a NEW ephemeral port (avoids colliding with anything).
+    // In Wave 2 this MUST succeed and the handle's host/port should be
+    // updated to the new target.
+    const newPort = ephemeralPort + 1;
+    await expect(fx.handle.rebind('127.0.0.1', newPort)).resolves.toBeUndefined();
+    expect(fx.handle.host).toBe('127.0.0.1');
+    expect(fx.handle.port).toBe(newPort);
   });
 });
 
