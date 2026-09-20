@@ -37,6 +37,8 @@ export default defineConfig({
     // browser.* tools (navigate / click / type / fill_form / screenshot /
     // evaluate) end-to-end against a tmpfs Node http.createServer fixture
     // + audit minimization assertions for every case (Pitfall 5).
+    // Phase 9 Plan 3 added phone-reach.test.ts covering the WS round-trip
+    // + cancel + ReachInfoPill + malformed-JSON-drop cases.
     {
       name: 'daemon-smoke',
       testMatch: /.*\.test\.ts/,

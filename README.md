@@ -45,6 +45,60 @@ Planning + verification artifacts live in `.planning/`. Headed-Electron smoke co
 
 ---
 
+## Build
+
+```bash
+npm run build          # main + renderer + phone bundles
+npm run dist           # produces dist/setup/Localbot Setup <version>.exe (NSIS installer)
+npm run dist:dir       # produces dist/setup/win-unpacked/ (unpacked for smoke verify, no NSIS)
+```
+
+The NSIS installer is **per-user** (`perMachine: false`) so it does not require admin elevation and installs into `%LOCALAPPDATA%\Programs\Localbot\`. The installer bundles `dist/phone/**/*` inside `app.asar` so the phone UI is shipped in the same installer as the desktop app. Playwright + Chromium binaries are NOT bundled (pre-built binaries excluded from build.files).
+
+---
+
+## Code signing (v1 limitation)
+
+Localbot v1 ships **without a code signing certificate**. Windows SmartScreen will block the installer with "Windows protected your PC" on first run. The workaround is straightforward:
+
+1. Right-click `Localbot Setup <version>.exe` → **Properties**
+2. On the **General** tab, check **Unblock** at the bottom
+3. Click **OK**, then double-click the installer
+
+The app then runs normally. The next updates will trigger the same SmartScreen prompt until a cert is acquired.
+
+### v2: signing the installer
+
+For v2 we plan to add an EV certificate from DigiCert or Sectigo. When the cert is available, set these env vars before running `npm run dist`:
+
+- `CSC_LINK` — base64-encoded `.pfx` (or `.p12`) file path or URL
+- `CSC_KEY_PASSWORD` — password for the `.pfx`
+
+electron-builder auto-signs both the installer and the inner `app.asar`; SmartScreen warnings disappear on signed builds.
+
+---
+
+## Phone reach
+
+Localbot can be reached from a phone browser over Tailscale. The HTTP + WebSocket server runs on a configurable port (default `7878`).
+
+### Setup
+
+1. Install Tailscale on the PC running Localbot and on the phone (`https://tailscale.com/download`).
+2. Sign in to both devices under the same tailnet.
+3. Localbot binds **localhost-only by default** (127.0.0.1). Open **Settings → Network** and either:
+   - set Bind mode to **LAN (0.0.0.0)** for plain LAN access (fire your phone's browser at `<lan-ip>:7878`), or
+   - keep Bind mode on **Localhost** and rely on Tailscale's user-space networking.
+4. The **ReachInfoPill** in the top bar shows the Tailscale MagicDNS name when `state.json` is present at `%LOCALAPPDATA%\Tailscale\state.json`. Use that hostname from the phone's browser.
+
+### Threat model (v1)
+
+- The WS server has **no authentication in v1**. Treat it as LAN-only. We strongly recommend Tailscale ACLs as the access control layer — do NOT bind to LAN on an untrusted network without a Tailscale / VPN tunnel in place.
+- LAN bind (0.0.0.0) is an explicit opt-in. The NetworkSettingsModal calls it out in the bind-mode hint.
+- Mid-session channel changes require an app restart — `autoUpdater.channel` is set at startup before the first `checkForUpdates()` (Pitfall 6).
+
+---
+
 ## Architecture
 
 ```
